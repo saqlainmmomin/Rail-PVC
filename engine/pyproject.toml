@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "railpvc-engine"
+version = "0.1.0"
+description = "Pure Python PVC calculation engine — no DB, no HTTP, deterministic"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.0",
+    "mypy>=1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["engine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
