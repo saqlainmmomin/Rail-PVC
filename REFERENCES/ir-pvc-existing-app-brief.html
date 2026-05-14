@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IR-PVC Existing Application Reverse Engineering Brief</title>
+  <style>
+    :root {
+      --bg: #061019;
+      --panel: rgba(17, 29, 42, 0.82);
+      --panel-2: rgba(11, 20, 30, 0.94);
+      --border: rgba(151, 183, 214, 0.16);
+      --text: #ecf2fb;
+      --muted: #a1b3c9;
+      --soft: #7c90a8;
+      --accent: #65d5ff;
+      --accent-2: #7af0c7;
+      --accent-3: #ffd27d;
+      --danger: #ff9696;
+      --shadow: 0 26px 90px rgba(0, 0, 0, 0.36);
+      --radius: 22px;
+      --mono: "SFMono-Regular", ui-monospace, Menlo, Monaco, Consolas, monospace;
+      --sans: "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+      --max: 1280px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at 0% 0%, rgba(101, 213, 255, 0.12), transparent 28%),
+        radial-gradient(circle at 100% 20%, rgba(122, 240, 199, 0.08), transparent 22%),
+        radial-gradient(circle at 50% 100%, rgba(255, 210, 125, 0.07), transparent 30%),
+        linear-gradient(180deg, #050b12 0%, #07111b 44%, #091520 100%);
+      line-height: 1.58;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    .wrap { width: min(calc(100% - 32px), var(--max)); margin: 0 auto; }
+    .sticky {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      backdrop-filter: blur(12px);
+      background: rgba(6, 10, 16, 0.72);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .topbar {
+      min-height: 66px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .nav a {
+      color: var(--soft);
+      font-size: 0.94rem;
+    }
+    .section { padding: 42px 0; }
+    .grid { display: grid; gap: 18px; }
+    .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      padding: 22px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(122, 240, 199, 0.06);
+      color: var(--accent-2);
+      font-size: 0.83rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    h1, h2, h3, h4 { letter-spacing: -0.03em; margin: 0; }
+    h1 {
+      font-size: clamp(2.6rem, 5vw, 5.2rem);
+      line-height: 0.95;
+      margin-top: 18px;
+      max-width: 10ch;
+    }
+    h2 { font-size: clamp(1.7rem, 2.3vw, 2.7rem); }
+    h3 { margin-bottom: 10px; font-size: 1.16rem; }
+    p { color: var(--muted); margin: 0; }
+    .small { color: var(--soft); font-size: 0.92rem; }
+    .hero {
+      padding: 62px 0 30px;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.22fr 0.78fr;
+      gap: 20px;
+    }
+    .hero-main {
+      min-height: 430px;
+      background:
+        linear-gradient(135deg, rgba(101, 213, 255, 0.08), rgba(122, 240, 199, 0.04)),
+        var(--panel-2);
+    }
+    .lead {
+      font-size: 1.05rem;
+      max-width: 70ch;
+      margin-top: 14px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 22px;
+    }
+    .stat {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.03);
+    }
+    .stat .k {
+      display: block;
+      font-size: 1.42rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    .pill {
+      padding: 8px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(255,255,255,0.03);
+      font-size: 0.9rem;
+    }
+    .callout {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-left: 3px solid var(--accent);
+      background: rgba(101, 213, 255, 0.06);
+      border-radius: 0 12px 12px 0;
+      color: var(--muted);
+    }
+    .callout.warn {
+      border-left-color: var(--danger);
+      background: rgba(255, 150, 150, 0.07);
+    }
+    .hero-side { display: grid; gap: 18px; }
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .timeline {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+    }
+    .step {
+      min-width: 180px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      position: relative;
+    }
+    .step::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -12px;
+      width: 12px;
+      height: 2px;
+      background: rgba(101, 213, 255, 0.42);
+    }
+    .step:last-child::after { display: none; }
+    .n {
+      color: var(--accent-2);
+      font: 700 0.84rem var(--mono);
+      margin-bottom: 10px;
+    }
+    .step strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+    .lane {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 12px;
+      margin-bottom: 14px;
+      align-items: start;
+    }
+    .lane-title {
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--accent-2);
+      font-weight: 600;
+    }
+    .lane-track {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .mini {
+      min-width: 155px;
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 11px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    th { color: var(--text); font-weight: 700; }
+    td { color: var(--muted); }
+    .tag {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--accent-3);
+      background: rgba(255,210,125,0.08);
+      font-size: 0.8rem;
+    }
+    .codebox {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid rgba(101, 213, 255, 0.18);
+      background: #07101a;
+      font: 0.93rem/1.55 var(--mono);
+      color: #cee9ff;
+      white-space: pre-wrap;
+    }
+    .matrix {
+      display: grid;
+      grid-template-columns: 120px repeat(4, 1fr);
+      gap: 8px;
+    }
+    .matrix div {
+      padding: 14px 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.03);
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .matrix .head {
+      font-weight: 700;
+      color: var(--text);
+      background: rgba(101, 213, 255, 0.07);
+    }
+    .low { background: rgba(122, 240, 199, 0.1) !important; }
+    .med { background: rgba(255, 210, 125, 0.1) !important; }
+    .high { background: rgba(255, 150, 150, 0.11) !important; }
+    .wire {
+      padding: 14px;
+      border-radius: 22px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01)),
+        #0a131d;
+    }
+    .wire-top { display: flex; gap: 8px; margin-bottom: 12px; }
+    .dot { width: 10px; height: 10px; border-radius: 999px; background: rgba(255,255,255,0.18); }
+    .wf-grid { display: grid; grid-template-columns: 220px 1fr; gap: 12px; }
+    .wf-box, .wf-side, .wf-main {
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.03);
+    }
+    .wf-side, .wf-main { padding: 12px; }
+    .wf-box { min-height: 78px; padding: 10px; margin-bottom: 10px; }
+    .wf-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    svg { width: 100%; height: auto; display: block; }
+    .footer {
+      padding: 40px 0 70px;
+      color: var(--soft);
+    }
+    @media (max-width: 1100px) {
+      .hero-grid, .g2, .g3, .g4, .wf-grid, .lane { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
+      .matrix { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 720px) {
+      .wrap { width: min(calc(100% - 20px), var(--max)); }
+      .card { padding: 18px; }
+      .matrix { grid-template-columns: 1fr; }
+      .topbar { align-items: flex-start; padding: 10px 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="sticky">
+    <div class="wrap topbar">
+      <div class="eyebrow">Existing Application Analysis</div>
+      <nav class="nav">
+        <a href="#overview">Overview</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#screens">Screens</a>
+        <a href="#data">Data Model</a>
+        <a href="#formula">Formula</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#gaps">Weaknesses</a>
+      </nav>
+    </div>
+  </div>
+
+  <header class="hero" id="overview">
+    <div class="wrap hero-grid">
+      <section class="card hero-main">
+        <div class="eyebrow">IR-PVC Reverse Engineering</div>
+        <h1>Existing PVC Application Architecture</h1>
+        <p class="lead">
+          IR-PVC is a vertical SaaS platform for Indian Railway contractors that automates Price Variation Clause calculations
+          using contract setup data, bill classifications, and a centralized historical index database covering labour, fuel,
+          steel, and material price series.
+        </p>
+        <div class="pill-row">
+          <span class="pill">Contract lifecycle management</span>
+          <span class="pill">PVC calculation workflow</span>
+          <span class="pill">Wallet-gated computation</span>
+          <span class="pill">Zone-specific index usage</span>
+          <span class="pill">PDF engineering reports</span>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <span class="k">9+</span>
+            <span class="small">screens across contract, bill, and report workflow</span>
+          </div>
+          <div class="stat">
+            <span class="k">3</span>
+            <span class="small">core moats: index pipeline, rules engine, wallet architecture</span>
+          </div>
+          <div class="stat">
+            <span class="k">Manual</span>
+            <span class="small">classification mapping remains a dominant operator burden</span>
+          </div>
+        </div>
+        <div class="callout">
+          The application does not appear to own the full contractor billing workflow yet. It primarily standardizes the final PVC computation layer after users bring in already-prepared bill values.
+        </div>
+      </section>
+
+      <aside class="hero-side">
+        <div class="card">
+          <h3>Executive Summary</h3>
+          <table>
+            <tr><th>Category</th><td>Vertical SaaS</td></tr>
+            <tr><th>Domain</th><td>Indian Railway contractor PVC billing</td></tr>
+            <tr><th>Primary output</th><td>PVC calculation and report pack</td></tr>
+            <tr><th>Data dependency</th><td>Historical RBI / JPC index database</td></tr>
+            <tr><th>Monetization</th><td>Wallet / credit consumption model</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Core Product Thesis</h3>
+          <p>
+            Replace spreadsheet-based PVC calculations with a controlled workflow that starts at contract setup, carries
+            extension and classification context into running bills, and outputs a standardized engineering report.
+          </p>
+          <div class="callout warn">
+            The current product still leaves upstream quantity generation outside the system. That limits automation and keeps Excel in the loop.
+          </div>
+        </div>
+      </aside>
+    </div>
+  </header>
+
+  <section class="section" id="workflow">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Workflow Breakdown</div>
+          <h2>End-To-End Product Flow</h2>
+        </div>
+      </div>
+      <div class="card">
+        <div class="timeline">
+          <div class="step"><div class="n">01</div><strong>Account Creation</strong><span class="small">signup, verification, login</span></div>
+          <div class="step"><div class="n">02</div><strong>Contract Setup</strong><span class="small">agreement, tender, schedules, base month</span></div>
+          <div class="step"><div class="n">03</div><strong>Extensions</strong><span class="small">17A / 17B logic, revised completion dates</span></div>
+          <div class="step"><div class="n">04</div><strong>Bill Creation</strong><span class="small">bill number, zone, measurement date, gross amount</span></div>
+          <div class="step"><div class="n">05</div><strong>Classification Mapping</strong><span class="small">schedule to sub-classification linking</span></div>
+          <div class="step"><div class="n">06</div><strong>Index Matching</strong><span class="small">base and current quarter index retrieval</span></div>
+          <div class="step"><div class="n">07</div><strong>PVC Calculation</strong><span class="small">component-wise formula execution</span></div>
+          <div class="step"><div class="n">08</div><strong>Wallet Check</strong><span class="small">computation gated by credit balance</span></div>
+          <div class="step"><div class="n">09</div><strong>Report Export</strong><span class="small">detailed PDF generation and sharing</span></div>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:18px;">
+        <div class="card">
+          <h3>Product Workflow Lanes</h3>
+          <div class="lane">
+            <div class="lane-title">User</div>
+            <div class="lane-track">
+              <div class="mini">Create contract</div>
+              <div class="mini">Configure schedules</div>
+              <div class="mini">Add extension if needed</div>
+              <div class="mini">Process bill</div>
+              <div class="mini">Download report</div>
+            </div>
+          </div>
+          <div class="lane">
+            <div class="lane-title">System</div>
+            <div class="lane-track">
+              <div class="mini">Calculate base month</div>
+              <div class="mini">Fetch classification defaults</div>
+              <div class="mini">Match indices by quarter and zone</div>
+              <div class="mini">Validate wallet balance</div>
+              <div class="mini">Generate PDF pack</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Operational Flow Character</h3>
+          <div class="grid" style="grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px;">
+            <div class="mini"><strong>Strongly guided</strong><br><span class="small">modal-heavy and form-driven, not spreadsheet-native</span></div>
+            <div class="mini"><strong>Calculation centric</strong><br><span class="small">optimized around the PVC moment, not full execution lifecycle</span></div>
+            <div class="mini"><strong>Index-dependent</strong><br><span class="small">value comes from controlled historical index references</span></div>
+            <div class="mini"><strong>Monetized at compute/report layer</strong><br><span class="small">wallet gating inserts a billing checkpoint before completion</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="screens">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Screen-by-Screen Analysis</div>
+          <h2>Observed Application Surface</h2>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Core Screens</h3>
+          <table>
+            <tr><th>Screen</th><th>Purpose</th><th>Backend behavior</th></tr>
+            <tr><td>Signup</td><td>User creation</td><td>Create record, validate password, trigger email token</td></tr>
+            <tr><td>Verification</td><td>Email confirmation</td><td>Check verified boolean, resend token</td></tr>
+            <tr><td>Login</td><td>Authentication</td><td>Issue JWT or session token</td></tr>
+            <tr><td>Dashboard</td><td>Metrics and contract list</td><td>Aggregate totals plus paginated contract fetch</td></tr>
+            <tr><td>Add New Contract</td><td>Contract creation</td><td>Insert contract plus schedule children, compute base month</td></tr>
+            <tr><td>Contract Details</td><td>Lifecycle management</td><td>Join contract with bills and extensions</td></tr>
+            <tr><td>Extension Modal</td><td>Timeline and penalty state</td><td>Persist extension, adjust eligibility logic</td></tr>
+            <tr><td>Process Bill</td><td>PVC input and compute trigger</td><td>Validate totals, map classifications, run engine</td></tr>
+            <tr><td>Insufficient Credit Modal</td><td>Monetization gate</td><td>Wallet check and Razorpay handoff</td></tr>
+            <tr><td>Bill Summary / PDF</td><td>Output and export</td><td>Generate final report artifact</td></tr>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>Conceptual UI Mockups</h3>
+          <div class="wire">
+            <div class="wire-top"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <h4 style="margin-bottom:12px;">Contract Dashboard</h4>
+            <div class="wf-grid">
+              <div class="wf-side">
+                <div class="wf-box"></div>
+                <div class="wf-box"></div>
+                <div class="wf-box"></div>
+              </div>
+              <div class="wf-main">
+                <div class="wf-duo">
+                  <div class="wf-box"></div>
+                  <div class="wf-box"></div>
+                </div>
+                <div class="wf-box" style="min-height: 132px;"></div>
+                <div class="wf-box"></div>
+              </div>
+            </div>
+          </div>
+          <div class="wire" style="margin-top:14px;">
+            <div class="wire-top"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+            <h4 style="margin-bottom:12px;">Bill Processing Screen</h4>
+            <div class="wf-main">
+              <div class="wf-duo">
+                <div class="wf-box"></div>
+                <div class="wf-box"></div>
+              </div>
+              <div class="wf-box" style="min-height: 146px;"></div>
+              <div class="wf-box" style="min-height: 92px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="data">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Entity Model</div>
+          <h2>Core Data Structure</h2>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <svg viewBox="0 0 820 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="IR PVC data model">
+            <defs>
+              <linearGradient id="grad1" x1="0" x2="1">
+                <stop offset="0%" stop-color="#153246"/>
+                <stop offset="100%" stop-color="#0f2534"/>
+              </linearGradient>
+              <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="rgba(101,213,255,0.58)"/>
+              </marker>
+            </defs>
+            <rect x="24" y="32" width="160" height="86" rx="16" fill="url(#grad1)" stroke="rgba(101,213,255,0.35)"/>
+            <text x="48" y="60" fill="#ecf2fb" font-size="21" font-weight="700">User / Tenant</text>
+            <text x="48" y="84" fill="#a1b3c9" font-size="14">identity, wallet, isolation</text>
+
+            <rect x="232" y="32" width="178" height="102" rx="16" fill="url(#grad1)" stroke="rgba(122,240,199,0.35)"/>
+            <text x="258" y="60" fill="#ecf2fb" font-size="21" font-weight="700">Contract</text>
+            <text x="258" y="84" fill="#a1b3c9" font-size="14">agreement, tender, value</text>
+            <text x="258" y="104" fill="#a1b3c9" font-size="14">opening date, base month</text>
+
+            <rect x="456" y="32" width="150" height="86" rx="16" fill="url(#grad1)" stroke="rgba(255,210,125,0.35)"/>
+            <text x="482" y="60" fill="#ecf2fb" font-size="21" font-weight="700">Schedule</text>
+            <text x="482" y="84" fill="#a1b3c9" font-size="14">SCH A, SCH B, arrays</text>
+
+            <rect x="642" y="32" width="150" height="86" rx="16" fill="url(#grad1)" stroke="rgba(255,150,150,0.35)"/>
+            <text x="676" y="60" fill="#ecf2fb" font-size="21" font-weight="700">Extension</text>
+            <text x="666" y="84" fill="#a1b3c9" font-size="14">17A, 17B, dates</text>
+
+            <rect x="122" y="214" width="180" height="94" rx="16" fill="url(#grad1)" stroke="rgba(101,213,255,0.35)"/>
+            <text x="152" y="244" fill="#ecf2fb" font-size="21" font-weight="700">Bill</text>
+            <text x="152" y="268" fill="#a1b3c9" font-size="14">measurement date, zone</text>
+            <text x="152" y="288" fill="#a1b3c9" font-size="14">gross amount, PVC total</text>
+
+            <rect x="352" y="214" width="200" height="114" rx="16" fill="url(#grad1)" stroke="rgba(122,240,199,0.35)"/>
+            <text x="384" y="244" fill="#ecf2fb" font-size="21" font-weight="700">Bill Classification</text>
+            <text x="384" y="268" fill="#a1b3c9" font-size="14">schedule link</text>
+            <text x="384" y="288" fill="#a1b3c9" font-size="14">main classification</text>
+            <text x="384" y="308" fill="#a1b3c9" font-size="14">sub classification and amount</text>
+
+            <rect x="604" y="214" width="170" height="94" rx="16" fill="url(#grad1)" stroke="rgba(255,210,125,0.35)"/>
+            <text x="642" y="244" fill="#ecf2fb" font-size="21" font-weight="700">Index</text>
+            <text x="632" y="268" fill="#a1b3c9" font-size="14">month, zone, category</text>
+            <text x="632" y="288" fill="#a1b3c9" font-size="14">historical value</text>
+
+            <rect x="250" y="398" width="190" height="96" rx="16" fill="url(#grad1)" stroke="rgba(101,213,255,0.35)"/>
+            <text x="276" y="428" fill="#ecf2fb" font-size="21" font-weight="700">Calculation Run</text>
+            <text x="276" y="452" fill="#a1b3c9" font-size="14">component outputs</text>
+            <text x="276" y="472" fill="#a1b3c9" font-size="14">formula trace and report data</text>
+
+            <rect x="504" y="398" width="210" height="96" rx="16" fill="url(#grad1)" stroke="rgba(255,150,150,0.35)"/>
+            <text x="540" y="428" fill="#ecf2fb" font-size="21" font-weight="700">Wallet / Payment</text>
+            <text x="540" y="452" fill="#a1b3c9" font-size="14">balance, debit, top-up, webhook</text>
+            <text x="540" y="472" fill="#a1b3c9" font-size="14">compute entitlement gate</text>
+
+            <line x1="184" y1="76" x2="232" y2="76" stroke="rgba(101,213,255,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="410" y1="76" x2="456" y2="76" stroke="rgba(101,213,255,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="606" y1="76" x2="642" y2="76" stroke="rgba(101,213,255,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="320" y1="134" x2="212" y2="214" stroke="rgba(101,213,255,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="342" y1="134" x2="452" y2="214" stroke="rgba(101,213,255,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="700" y1="118" x2="690" y2="214" stroke="rgba(101,213,255,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="302" y1="260" x2="352" y2="260" stroke="rgba(122,240,199,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="552" y1="260" x2="604" y2="260" stroke="rgba(122,240,199,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="452" y1="328" x2="344" y2="398" stroke="rgba(255,210,125,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="688" y1="308" x2="608" y2="398" stroke="rgba(255,210,125,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+            <line x1="440" y1="446" x2="504" y2="446" stroke="rgba(101,213,255,0.56)" stroke-width="2.4" marker-end="url(#arr)"/>
+          </svg>
+        </div>
+
+        <div class="card">
+          <h3>Entity Breakdown</h3>
+          <table>
+            <tr><th>Entity</th><th>Key fields</th></tr>
+            <tr><td>User / Tenant</td><td>ID, Name, Email, WhatsApp, PasswordHash, WalletBalance</td></tr>
+            <tr><td>Contract</td><td>AgreementNumber, LOANumber, ContractorName, WorkDescription, TenderValue, AgreementValue, DateOfOpening, BaseMonth</td></tr>
+            <tr><td>Schedule</td><td>ContractID, ScheduleName</td></tr>
+            <tr><td>Extension</td><td>ContractID, Type, OriginalDate, ExtendedDate</td></tr>
+            <tr><td>Bill</td><td>ContractID, BillNumber, MeasurementDate, RailwayZone, FuelBasis, TotalBillAmount, TotalPVCAmount, Status</td></tr>
+            <tr><td>BillClassification</td><td>BillID, ScheduleID, MainClassification, SubClassification, Amount</td></tr>
+            <tr><td>Index</td><td>Period, Category, Zone, Value</td></tr>
+          </table>
+          <div class="callout">
+            The model is structurally simple. The real complexity sits in reference data quality and the rule layer that connects classifications to index categories and component weights.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="formula">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Formula Analysis</div>
+          <h2>PVC Engine Inference</h2>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Calculation Pipeline</h3>
+          <svg viewBox="0 0 760 350" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PVC formula pipeline">
+            <defs>
+              <marker id="arr2" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="rgba(122,240,199,0.62)"/>
+              </marker>
+            </defs>
+            <rect x="24" y="52" width="142" height="72" rx="16" fill="#133244" stroke="rgba(101,213,255,0.35)"/>
+            <text x="48" y="82" fill="#ecf2fb" font-size="18" font-weight="700">Contract Data</text>
+            <text x="48" y="104" fill="#a1b3c9" font-size="14">base month, schedule</text>
+
+            <rect x="204" y="52" width="142" height="72" rx="16" fill="#133244" stroke="rgba(122,240,199,0.35)"/>
+            <text x="236" y="82" fill="#ecf2fb" font-size="18" font-weight="700">Bill Input</text>
+            <text x="230" y="104" fill="#a1b3c9" font-size="14">amounts and classes</text>
+
+            <rect x="384" y="52" width="154" height="72" rx="16" fill="#133244" stroke="rgba(255,210,125,0.35)"/>
+            <text x="404" y="82" fill="#ecf2fb" font-size="18" font-weight="700">Quarter Resolver</text>
+            <text x="404" y="104" fill="#a1b3c9" font-size="14">measurement date to index period</text>
+
+            <rect x="576" y="52" width="152" height="72" rx="16" fill="#133244" stroke="rgba(255,150,150,0.35)"/>
+            <text x="602" y="82" fill="#ecf2fb" font-size="18" font-weight="700">Index Lookup</text>
+            <text x="598" y="104" fill="#a1b3c9" font-size="14">RBI / JPC / zone basis</text>
+
+            <rect x="98" y="212" width="170" height="86" rx="16" fill="#102938" stroke="rgba(101,213,255,0.35)"/>
+            <text x="126" y="244" fill="#ecf2fb" font-size="19" font-weight="700">Weight Resolver</text>
+            <text x="126" y="266" fill="#a1b3c9" font-size="14">classification to labour / fuel /</text>
+            <text x="126" y="286" fill="#a1b3c9" font-size="14">material / plant percentages</text>
+
+            <rect x="318" y="212" width="150" height="86" rx="16" fill="#102938" stroke="rgba(122,240,199,0.35)"/>
+            <text x="344" y="244" fill="#ecf2fb" font-size="19" font-weight="700">Formula Core</text>
+            <text x="338" y="266" fill="#a1b3c9" font-size="14">(Amount * Component%) *</text>
+            <text x="338" y="286" fill="#a1b3c9" font-size="14">(Diff / Base Index)</text>
+
+            <rect x="520" y="212" width="170" height="86" rx="16" fill="#102938" stroke="rgba(255,210,125,0.35)"/>
+            <text x="550" y="244" fill="#ecf2fb" font-size="19" font-weight="700">Report Builder</text>
+            <text x="546" y="266" fill="#a1b3c9" font-size="14">component results, averages,</text>
+            <text x="546" y="286" fill="#a1b3c9" font-size="14">base/current index tables</text>
+
+            <line x1="166" y1="88" x2="204" y2="88" stroke="rgba(122,240,199,0.62)" stroke-width="2.4" marker-end="url(#arr2)"/>
+            <line x1="346" y1="88" x2="384" y2="88" stroke="rgba(122,240,199,0.62)" stroke-width="2.4" marker-end="url(#arr2)"/>
+            <line x1="538" y1="88" x2="576" y2="88" stroke="rgba(122,240,199,0.62)" stroke-width="2.4" marker-end="url(#arr2)"/>
+            <line x1="276" y1="124" x2="182" y2="212" stroke="rgba(122,240,199,0.62)" stroke-width="2.4" marker-end="url(#arr2)"/>
+            <line x1="652" y1="124" x2="392" y2="212" stroke="rgba(122,240,199,0.62)" stroke-width="2.4" marker-end="url(#arr2)"/>
+            <line x1="268" y1="255" x2="318" y2="255" stroke="rgba(122,240,199,0.62)" stroke-width="2.4" marker-end="url(#arr2)"/>
+            <line x1="468" y1="255" x2="520" y2="255" stroke="rgba(122,240,199,0.62)" stroke-width="2.4" marker-end="url(#arr2)"/>
+          </svg>
+        </div>
+
+        <div class="card">
+          <h3>Observed Formula Logic</h3>
+          <div class="codebox">1. Base month = usually one month prior to date of opening
+2. Work classification carries fixed component percentage weights
+3. Current quarter index is resolved from measurement date
+4. Base index and current index are fetched from historical data store
+5. PVC formula:
+
+   (Amount * Component %) * ((Current Quarter Index - Base Index) / Base Index)
+
+6. Steel logic uses JPC zone-specific retail market rates
+7. Fuel logic uses railway zone / diesel basis selection
+8. Extension status can alter eligibility or capping behavior</div>
+          <div class="grid" style="grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin-top: 12px;">
+            <div class="mini"><strong>Deterministic core</strong><br><span class="small">the calculation appears rules-based, not probabilistic</span></div>
+            <div class="mini"><strong>Strong reference-data dependency</strong><br><span class="small">index accuracy is central to correctness</span></div>
+            <div class="mini"><strong>Classification-driven percentages</strong><br><span class="small">weights appear keyed by standardized railway work categories</span></div>
+            <div class="mini"><strong>Penalty-aware eligibility</strong><br><span class="small">extensions can modify allowable PVC treatment</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="architecture">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Backend Architecture Inference</div>
+          <h2>Likely Technical Design</h2>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <svg viewBox="0 0 860 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Existing app architecture">
+            <defs>
+              <marker id="arr3" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+                <path d="M0,0 L10,5 L0,10 z" fill="rgba(101,213,255,0.58)"/>
+              </marker>
+            </defs>
+            <rect x="34" y="36" width="180" height="84" rx="18" fill="#112b3a" stroke="rgba(101,213,255,0.35)"/>
+            <text x="82" y="68" fill="#ecf2fb" font-size="22" font-weight="700">SPA Frontend</text>
+            <text x="62" y="94" fill="#a1b3c9" font-size="14">React or Vue.js</text>
+
+            <rect x="262" y="36" width="196" height="84" rx="18" fill="#112b3a" stroke="rgba(122,240,199,0.35)"/>
+            <text x="326" y="68" fill="#ecf2fb" font-size="22" font-weight="700">API Layer</text>
+            <text x="300" y="94" fill="#a1b3c9" font-size="14">Node.js or Python backend</text>
+
+            <rect x="504" y="36" width="156" height="84" rx="18" fill="#112b3a" stroke="rgba(255,210,125,0.35)"/>
+            <text x="540" y="68" fill="#ecf2fb" font-size="22" font-weight="700">Auth</text>
+            <text x="524" y="94" fill="#a1b3c9" font-size="14">session / JWT handling</text>
+
+            <rect x="696" y="36" width="130" height="84" rx="18" fill="#112b3a" stroke="rgba(255,150,150,0.35)"/>
+            <text x="718" y="68" fill="#ecf2fb" font-size="22" font-weight="700">Wallet</text>
+            <text x="710" y="94" fill="#a1b3c9" font-size="14">Razorpay</text>
+
+            <rect x="82" y="192" width="182" height="98" rx="18" fill="#102938" stroke="rgba(101,213,255,0.35)"/>
+            <text x="112" y="224" fill="#ecf2fb" font-size="21" font-weight="700">Contract Service</text>
+            <text x="112" y="248" fill="#a1b3c9" font-size="14">contracts, schedules,</text>
+            <text x="112" y="268" fill="#a1b3c9" font-size="14">extensions, dashboards</text>
+
+            <rect x="324" y="182" width="208" height="118" rx="18" fill="#102938" stroke="rgba(122,240,199,0.35)"/>
+            <text x="362" y="214" fill="#ecf2fb" font-size="21" font-weight="700">Calculation Engine</text>
+            <text x="350" y="238" fill="#a1b3c9" font-size="14">classification weights</text>
+            <text x="350" y="258" fill="#a1b3c9" font-size="14">quarter resolution</text>
+            <text x="350" y="278" fill="#a1b3c9" font-size="14">PVC formula execution</text>
+
+            <rect x="588" y="192" width="194" height="98" rx="18" fill="#102938" stroke="rgba(255,210,125,0.35)"/>
+            <text x="626" y="224" fill="#ecf2fb" font-size="21" font-weight="700">Index Data Store</text>
+            <text x="618" y="248" fill="#a1b3c9" font-size="14">RBI / JPC historical</text>
+            <text x="618" y="268" fill="#a1b3c9" font-size="14">time-series by zone/category</text>
+
+            <rect x="104" y="382" width="176" height="92" rx="18" fill="#102634" stroke="rgba(101,213,255,0.35)"/>
+            <text x="140" y="414" fill="#ecf2fb" font-size="21" font-weight="700">Relational DB</text>
+            <text x="132" y="438" fill="#a1b3c9" font-size="14">contracts, bills, users</text>
+
+            <rect x="344" y="382" width="176" height="92" rx="18" fill="#102634" stroke="rgba(122,240,199,0.35)"/>
+            <text x="384" y="414" fill="#ecf2fb" font-size="21" font-weight="700">PDF Service</text>
+            <text x="374" y="438" fill="#a1b3c9" font-size="14">Puppeteer-like generator</text>
+
+            <rect x="586" y="382" width="202" height="92" rx="18" fill="#102634" stroke="rgba(255,150,150,0.35)"/>
+            <text x="632" y="414" fill="#ecf2fb" font-size="21" font-weight="700">AI Suggestion Layer</text>
+            <text x="614" y="438" fill="#a1b3c9" font-size="14">classification mapping hints</text>
+
+            <line x1="214" y1="78" x2="262" y2="78" stroke="rgba(101,213,255,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="458" y1="78" x2="504" y2="78" stroke="rgba(101,213,255,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="660" y1="78" x2="696" y2="78" stroke="rgba(101,213,255,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="360" y1="120" x2="174" y2="192" stroke="rgba(101,213,255,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="360" y1="120" x2="428" y2="182" stroke="rgba(101,213,255,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="582" y1="120" x2="686" y2="192" stroke="rgba(101,213,255,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="264" y1="241" x2="324" y2="241" stroke="rgba(122,240,199,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="532" y1="241" x2="588" y2="241" stroke="rgba(122,240,199,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="192" y1="290" x2="192" y2="382" stroke="rgba(255,210,125,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="428" y1="300" x2="432" y2="382" stroke="rgba(255,210,125,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+            <line x1="686" y1="290" x2="686" y2="382" stroke="rgba(255,210,125,0.58)" stroke-width="2.4" marker-end="url(#arr3)"/>
+          </svg>
+        </div>
+
+        <div class="card">
+          <h3>Architecture Notes</h3>
+          <div class="grid" style="grid-template-columns: 1fr; gap: 12px;">
+            <div class="mini"><strong>Frontend</strong><br><span class="small">Single-page application behavior suggests React or Vue with modal-heavy client state.</span></div>
+            <div class="mini"><strong>Backend</strong><br><span class="small">Likely Node.js or Python due to form workflows plus deterministic formula processing.</span></div>
+            <div class="mini"><strong>Database</strong><br><span class="small">Relational storage fits structured contracts, bills, extensions, and historical time-series indices.</span></div>
+            <div class="mini"><strong>PDF generation</strong><br><span class="small">Likely HTML-to-PDF rendering pipeline such as Puppeteer for the 9+ page engineering report.</span></div>
+            <div class="mini"><strong>AI layer</strong><br><span class="small">Probably a lightweight NLP or embedding-assisted suggestion layer for classification mapping, not a deep autonomous engine.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="gaps">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow">Weaknesses And Opportunities</div>
+          <h2>Where The Existing Product Falls Short</h2>
+        </div>
+      </div>
+      <div class="grid g2">
+        <div class="card">
+          <h3>Product Weakness Matrix</h3>
+          <div class="matrix">
+            <div class="head">Area</div>
+            <div class="head">Low</div>
+            <div class="head">Medium</div>
+            <div class="head">High</div>
+            <div class="head">Critical</div>
+
+            <div class="head">UX</div>
+            <div class="low">guided forms</div>
+            <div class="med">long data entry</div>
+            <div class="high">manual classification</div>
+            <div class="high">workflow interruption at wallet gate</div>
+
+            <div class="head">Data</div>
+            <div class="low">structured contract master</div>
+            <div class="med">manual schedule linking</div>
+            <div class="high">upstream Excel dependence</div>
+            <div class="high">missing MB-native bill generation</div>
+
+            <div class="head">Automation</div>
+            <div class="low">AI suggestion hints</div>
+            <div class="med">base month auto-calc</div>
+            <div class="high">repetitive subclass mapping</div>
+            <div class="high">no upstream execution ingestion</div>
+
+            <div class="head">Moat</div>
+            <div class="low">report formatting</div>
+            <div class="med">wallet integration</div>
+            <div class="high">rule encoding</div>
+            <div class="high">historical index maintenance</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Modernization Path</h3>
+          <div class="grid" style="grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px;">
+            <div class="mini"><strong>Move upstream</strong><br><span class="small">ingest MB or Excel quantity sheets to generate bill amounts before PVC.</span></div>
+            <div class="mini"><strong>Reduce mapping friction</strong><br><span class="small">persist reusable contract-specific classification mappings and auto-apply them on later bills.</span></div>
+            <div class="mini"><strong>Shift wallet gating earlier</strong><br><span class="small">expose cost and credit needs before final submission step.</span></div>
+            <div class="mini"><strong>Document-assisted autofill</strong><br><span class="small">pull agreement numbers and descriptions directly from uploaded tender/agreement files.</span></div>
+          </div>
+          <div class="callout">
+            The largest product opportunity is to stop being only a PVC calculator and become the contractor billing operating system that produces PVC as a natural downstream output.
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g3" style="margin-top:18px;">
+        <div class="card">
+          <h3>Primary Moat</h3>
+          <p>A clean, complete, and continuously updated RBI / JPC index pipeline is the hardest asset to replicate reliably.</p>
+        </div>
+        <div class="card">
+          <h3>Rules Moat</h3>
+          <p>The deterministic GCC-aware rule engine becomes more valuable as it accumulates extension, penalty, and classification edge cases.</p>
+        </div>
+        <div class="card">
+          <h3>Commercial Control</h3>
+          <p>The wallet and tenant model monetizes computation cleanly, but it should be paired with better workflow timing to reduce user frustration.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="wrap">
+      <p>
+        This brief summarizes the existing IR-PVC application as a reverse-engineered SaaS product: a contract-driven,
+        index-backed PVC calculation platform with wallet monetization, guided bill processing, and standardized report generation.
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

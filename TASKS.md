@@ -34,7 +34,8 @@
 | P1-007 | Migration: pvc_runs, pvc_components, revision_snapshots | [CC] | P1-006 | Tables created; revision_snapshots has no UPDATE trigger (append-only enforced at API layer) | pvc_runs.superseded_by self-FK; NULL = active run |
 | P1-008 | Migration: extra_item_decisions, documents | [CC] | P1-002 | Tables created; extra_item_decisions.(contract_id, item_id) UNIQUE | eligible NULL = undecided. This field blocks PVC runs. |
 | P1-009 | Seed historical RBI/JPC index data (Jan 2022 – present) | [CC] | P1-005 | All 9 index series populated; at least 36 months of values per series; seed script is idempotent | Source: RBI WPI index publications + JPC Steel Price Index. BCT-24-25-252 base month Dec-24 must be seeded. |
-| P1-010 | Supabase RLS policies (tenant isolation) | [CC] | P1-007 | SELECT/INSERT/UPDATE/DELETE on all tables filtered by tenant_id; no cross-tenant data leakage | Test with two separate tenant auth tokens |
+| P1-010 | Supabase RLS policies (tenant isolation) — dashboard | [CC] | P1-007 | Policies written in Supabase SQL editor; SELECT/INSERT/UPDATE/DELETE on all tables filtered by tenant_id; revision_snapshots has no UPDATE policy | Apply via dashboard to learn RLS interactively before codifying |
+| P1-010-ALEMBIC | Capture RLS as Alembic migration 009 | [CC] | P1-010, P3-001 | All dashboard RLS SQL transcribed into migrations/versions/009_rls_policies.py; `alembic upgrade head` applies cleanly on fresh DB | **Trigger:** immediately before Phase 3 starts (auth middleware build). Not deferred past P3-001. |
 
 ---
 

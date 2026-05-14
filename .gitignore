@@ -38,3 +38,6 @@ Thumbs.db
 # Supabase
 supabase/.branches/
 supabase/.temp/
+
+# Sample documents (real contract data — keep local only)
+IRL PVC calculation sample/
