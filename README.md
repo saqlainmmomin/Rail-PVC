@@ -69,8 +69,9 @@ railpvc/
 ├── seeds/                  # Historical RBI/JPC index data
 ├── PRODUCT.md              # What we're building, personas, MVP scope
 ├── ARCHITECTURE.md         # Full technical spec, data model, API surface
-├── TASKS.md                # Build plan (CC-owned, Codex-readable)
-├── CODEX.md                # Codex role and review protocol
+├── TASKS.md                # Build plan ([CC-S], [CC-SH], [CODEX-S] ownership per task)
+├── CODEX.md                # Codex adversarial review protocol
+├── SESSION_LOG.md          # Decision record and work log
 └── CLAUDE.md               # Claude Code project context
 ```
 
@@ -136,22 +137,27 @@ See [`TASKS.md`](./TASKS.md) for the full phased build plan (9 phases, ~55 tasks
 |---|---|
 | 0 | Scaffolding |
 | 1 | Data model + migrations |
-| 2 | Calculation engine ← Codex review checkpoint |
-| 3 | API layer ← Codex review checkpoint |
-| 4 | Frontend shell |
+| 2 | Calculation engine ← Codex-S adversarial review (P2-REVIEW) |
+| 3 | API layer [CC-SH] ← Codex-S adversarial review (P3-REVIEW) |
+| 4 | Frontend shell [CC-S] |
 | 5 | Contract setup UI |
 | 6 | Bill entry UI |
 | 7 | PVC run + results UI |
-| 8 | Export layer ← Codex review checkpoint |
-| 9 | Integration + testing |
+| 8 | Export layer ← Codex-S adversarial review (P8-REVIEW) |
+| 9 | Integration + testing ← Codex-S second-pass debug (P9-DEBUG) |
 
 ---
 
 ## Development Workflow
 
-**Two-tool model:** Claude Code (CC) is the primary orchestrator. Codex acts as adversarial reviewer and UI component generator under CC supervision. See [`CODEX.md`](./CODEX.md) for Codex's role and boundaries.
+**Three-agent model:**
+- `[CC-S]` Claude Saqlain — engine, auth, business logic, critical UI, review responses
+- `[CC-SH]` Claude Shubham — Phase 3 API layer, UI generation tasks
+- `[CODEX-S]` Codex Saqlain — adversarial review only; writes to `REVIEW.md`, never touches code
 
-**Git:** GitHub Flow — `main` + feature branches. Branch naming: `feat/P2-001-calc-engine`.
+See [`CODEX.md`](./CODEX.md) for review protocol and hard boundaries. See [`SESSION_LOG.md`](./SESSION_LOG.md) for the full decision record.
+
+**Git:** feature branches per phase. `shubham/phase-N` for Shubham's work; `saqlain/phase-N` for Saqlain's. Merge to `main` only after Codex-S review checkpoints clear.
 
 **Local setup:** TBD (Phase 0 scaffolding).
 

@@ -64,7 +64,7 @@
 | P2-011 | Implement trace tree generation | [CC-S] | P2-010 | Every field in PVCRunResult.trace points to its source: {input_field, formula, index_ref, bill_line_ref} | Required for cell-level provenance in Phase 2+. Build the structure now even if UI doesn't use it yet |
 | P2-012 | pytest unit tests: all engine functions, 80%+ coverage | [CC-S] | P2-011 | `pytest engine/tests/ --cov=engine --cov-report=term` shows ≥80% | Fixtures: BCT-24-25-252 real values from workbook. Every edge case (zero cement, all-steel bill, carry-forward, negative PVC) must have a test |
 | P2-013 | Hypothesis property tests: W derivation invariants | [CC-S] | P2-012 | Properties: W ≤ on_account_amount; W ≥ 0 if no negative inputs; sum of subtractions + W == on_account_amount | Use hypothesis to generate random BillPayload values |
-| **P2-REVIEW** | **Adversarial engine review** | **[CODEX-S]** | P2-001–P2-013 | REVIEW.md updated with numbered critique. Check: silent defaults in W derivation, missing error states, formula invariants, carry-forward edge cases, quarter boundary ambiguity, negative PVC handling | **Blocks merge of shubham/phase-3 to main.** CC-SH may begin Phase 3 on feature branch in parallel. CC-S must respond to all CRITICAL/HIGH issues before merging either branch. |
+| **P2-REVIEW ✓** | **Adversarial engine review** | **[CODEX-S]** | P2-001–P2-013 | REVIEW.md updated with numbered critique. Check: silent defaults in W derivation, missing error states, formula invariants, carry-forward edge cases, quarter boundary ambiguity, negative PVC handling | **Blocks merge of shubham/phase-3 to main.** CC-SH may begin Phase 3 on feature branch in parallel. CC-S must respond to all CRITICAL/HIGH issues before merging either branch. |
 
 ---
 

@@ -157,3 +157,33 @@ Shubham's Claude must never touch: `engine/`, `backend/migrations/`, auth middle
 - BCT-24-25-252 real tender JSON fixture not yet created — needed for P9-002 engine regression tests
 - JPC seed coverage: Dec-2024 to present only; full backfill (Jan-2022 onward) is post-MVP
 - `pvc_runs.approved_by` is TEXT, not a user FK — post-MVP hardening item
+
+---
+
+## Workflow Confirmation — 2026-05-16
+
+### This is the permanent collaboration model going forward
+
+The three-agent split described above is now locked in. All future work proceeds under this model — no exceptions without explicit agreement from Saqlain.
+
+**Day-to-day flow:**
+
+1. **Codex-S runs first** at each review checkpoint (P2-REVIEW, P3-REVIEW, P8-REVIEW, P9-DEBUG). Saqlain triggers it manually against the completed phase. Output lands in `REVIEW.md` as numbered, severity-tagged issues.
+
+2. **CC-S responds to CRITICAL and HIGH issues** in `REVIEW.md` under each finding before the phase branch merges. MEDIUM and below are tracked but do not block the merge.
+
+3. **CC-SH works phase branches independently.** Shubham's Claude reads `TASKS.md`, `ARCHITECTURE.md`, and `CODEX.md` at the start of each session. It never modifies engine code, migrations, auth middleware, or snapshot logic — those are hard boundaries regardless of context.
+
+4. **`REVIEW.md` is the only async handoff document.** Neither agent pings the other directly. The review file is the contract: if a finding has a CC-S response and is marked resolved, it is closed. If it has no response, it is open and blocks the merge.
+
+5. **`SESSION_LOG.md` gets a new dated entry** for any significant decision, domain confirmation, or workflow change. Append at the bottom. This file is the audit trail for the project — not the git log, not chat history.
+
+**Branch lifecycle:**
+- Shubham opens `shubham/phase-N` → builds → CC-S + Codex-S review → CRITICAL/HIGH cleared → CC-S approves merge → merged to main → Shubham deletes branch and opens `shubham/phase-N+1`
+- CC-S works `saqlain/phase-N` in parallel where dependencies allow → merges after Shubham's prerequisites land
+
+**What CC-SH must read before starting Phase 3:**
+- `ARCHITECTURE.md` — full data model and API surface
+- `CODEX.md` — boundaries, review format, what never to touch
+- `TASKS.md` — Phase 3 task list, acceptance criteria, domain notes
+- `engine/` source — understand the types and output shape before building P3-009
