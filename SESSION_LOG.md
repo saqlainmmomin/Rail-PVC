@@ -499,7 +499,7 @@ Confirmed via `AskUserQuestion`: **defer to Phase 5.** The contracts smoke-test 
 
 ### Design decisions log
 
-Captured retrospectively in `tasks/track-b-design-decisions.md` (the original brief asked for an `AskUserQuestion` log up front; this session locked decisions inline and the live log wasn't captured). Ten sections: typeface, palette, sidebar shape, command palette, toast lib, density / numeric typography, AG Grid placeholder, error handling, TanStack Query setup, OpenAPI codegen.
+Captured retrospectively in `tasks/track-b-design-decisions.md` (the original brief asked for an `AskUserQuestion` log up front; this session locked decisions inline and the live log wasn't captured). Ten sections: typeface, palette, sidebar shape, command palette, toast lib, density / numeric typography, AG Grid placeholder, error handling, TanStack Query setup, OpenAPI codegen. **Appendix added (post-commit) cross-references each option in `tasks/phase-4-design-options.html` (the four-question mockup) against the file:line where it landed — every Phase 4 decision is now traceable; deferred items (5c approve, 5d pill content, AG Grid) map to phases with the prerequisite data.**
 
 ### Open items carried forward
 

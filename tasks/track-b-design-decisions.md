@@ -150,3 +150,80 @@
 - **Per-route breadcrumb depth** — the header has a section-only crumb; deeper crumbs land per-route when those routes get content.
 - **Header context-pill content** — the slot (`#header-context-slot`) exists so per-route children can portal contract/bill/quarter context in. Phase 5+ fills it.
 - **Phase 6 formula bar binding** — `contracts/page.tsx` shows the visual treatment so the pattern is locked in for when actual bill-line editing arrives.
+
+---
+
+## Appendix — `tasks/phase-4-design-options.html` ↔ implementation mapping
+
+The HTML mockup at `tasks/phase-4-design-options.html` presented four explicit decisions (visual identity, sidebar, command palette, toast lib) plus five "extras" (5a–5e). Every Phase 4 decision is traceable to a line of code; deferred items map to phases where the prerequisite data exists.
+
+### 1 · Visual identity → Option B (Editorial / Geist + amber-600)
+
+| Evidence | File:line |
+|---|---|
+| Geist + Geist Mono via `next/font/google` | `frontend/app/layout.tsx:7-8` |
+| `--color-accent: #d97706` (amber-600, exact swatch from the editorial card) | `frontend/app/globals.css:26-29` |
+| Slate scale neutrals (`#0f172a` / `#64748b` / `#e2e8f0` / `#f8fafc`) lifted from `.opt-editorial` vars verbatim | `frontend/app/globals.css:13-23` |
+
+**Rejected:** A (Inter + indigo — too default-bootstrap for 2026); C (IBM Plex + emerald — tightest density but trust-first beat that); D (Geist + terracotta — would have clashed with destructive-red).
+
+### 2 · Sidebar shape → Option C (Responsive auto-collapse + `⌘\` manual override)
+
+| Evidence | File:line |
+|---|---|
+| `SidebarMode = "auto" \| "manual"` two-mode model | `frontend/components/shell/ShellState.tsx:12-13` |
+| `matchMedia(max-width: 1279px)` auto-collapse | `frontend/components/shell/ShellState.tsx:24,37` |
+| Manual override pins mode after first toggle | `frontend/components/shell/ShellState.tsx:48-50` |
+| `⌘\` / `Ctrl+\` handler (exactly what the HTML's `opt-id` advertised) | `frontend/components/shell/ShellState.tsx:57-59` |
+| Widths 52 px collapsed / 220 px expanded (tighter than HTML's 200–240 to buy back canvas) | `frontend/components/shell/Sidebar.tsx:24-25` |
+
+**Rejected:** A (always-labeled — loses 200–240 px on 13" laptops, which is the HTML's own con); B (hover flyout — less discoverable, icons must be unambiguous).
+
+### 3 · Command palette → Option A (Route-jump only) + `g`-prefix Vim jumps
+
+| Evidence | File:line |
+|---|---|
+| `Command.Dialog` from `cmdk` (~150 LOC shape from Option A) | `frontend/components/shell/CommandPalette.tsx:64-67` |
+| "Navigate" group with `g c` / `g i` / `g d` hints | `frontend/components/shell/CommandPalette.tsx:98-128` |
+| "Recent runs" empty stub — exact copy from HTML line 1049 | `frontend/components/shell/CommandPalette.tsx:130-141` |
+| `g`-prefix listener with 1.2 s timeout, suppressed when typing | `frontend/components/shell/CommandPalette.tsx:24-55` |
+| Jump keys SSOT on nav items | `frontend/components/shell/nav.ts:16-18` |
+| `⌘K` / `Ctrl+K` palette toggle | `frontend/components/shell/ShellState.tsx:60-63` |
+
+**Rejected:** B (Palette + actions — `n c` / `n b` would be dangling stubs until P5 forms exist); C (defer entirely — would lose the keyboard-first DNA the brief argued for).
+
+### 4 · Toast library → Option A (Sonner, palette-overridden)
+
+| Evidence | File:line |
+|---|---|
+| `sonner: 2.0.7` | `frontend/package.json:21` |
+| `<Toaster position="bottom-right" closeButton richColors={false} />` | `frontend/app/layout.tsx:3,25-30` |
+| Palette overrides so toasts render on our slate/amber tokens | `frontend/app/globals.css:76-89` |
+| Description in Geist Mono + tabular-nums + 12 px (the "₹76,959.55 · Q2-FY2025-26" treatment from the mockup) | `frontend/app/globals.css:90-95` |
+| Live example matching mockup line 1389 | `frontend/app/(app)/contracts/page.tsx:109-114` |
+
+**Rejected:** B (custom Radix — re-implementing promise toasts not worth it before any feature uses them); C (react-hot-toast — "more 2020 than 2026", too informal for audit-grade billing).
+
+### 5 · Extras
+
+| Extra | Status | Evidence |
+|---|---|---|
+| 5a · Number cells | ✅ Mono for grid totals / formula bar / kbd hints; sans+tabular for general listings; never proportional | `frontend/app/globals.css:48-65` (tabular-nums on `body`, `.num-mono` / `.num-sans` helpers); `frontend/app/(app)/contracts/page.tsx:78-79,88` (mono on amount columns) |
+| 5b · Run-status badges | ✅ All four variants shipped, previewed in smoke-test panel | `frontend/components/ui/Badge.tsx` (variants `draft \| approved \| superseded \| blocked`); `frontend/app/(app)/contracts/page.tsx:54-57` |
+| 5c · Approve action | ⏸ Deferred to Phase 7 — no PVC-run UI exists yet, so the loud-green button + confirm card have nothing to bind to | (Phase 7) |
+| 5d · Header context pill | ⏸ Slot only; content per-route later | `frontend/components/shell/Header.tsx:30-32` (`#header-context-slot`); breadcrumb half wired at `:20-28` (section-only, deeper crumbs per-route later) |
+| 5e · Empty state | ✅ Shipped; copy matches mockup ("No contracts yet" / "Start with an LOA / tender number") | `frontend/components/ui/EmptyState.tsx`; `frontend/app/(app)/contracts/page.tsx:37-44` |
+
+### Net summary table
+
+| HTML decision | Picked | Where it lives |
+|---|---|---|
+| 1 · Visual identity | **B** · Editorial / Geist + amber-600 | `app/layout.tsx`, `app/globals.css` |
+| 2 · Sidebar | **C** · Auto-collapse + `⌘\` manual override | `components/shell/ShellState.tsx`, `Sidebar.tsx` |
+| 3 · Cmd palette | **A** · Route-jump only + `g`-prefix Vim jumps | `components/shell/CommandPalette.tsx` |
+| 4 · Toast lib | **A** · Sonner (palette-overridden) | `package.json`, `app/layout.tsx`, `app/globals.css` |
+| 5a · Number cells | mono for totals/formula/kbd, sans-tabular elsewhere | `app/globals.css`, contracts page |
+| 5b · Status badges | All four variants | `components/ui/Badge.tsx` |
+| 5c · Approve action | **Deferred** to Phase 7 | (no Phase 4 binding) |
+| 5d · Header context pill | **Slot only**; content per-route later | `components/shell/Header.tsx` |
+| 5e · Empty state | Shipped | `components/ui/EmptyState.tsx` |
