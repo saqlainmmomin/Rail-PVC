@@ -60,3 +60,71 @@ File: engine/calculator.py (lines 25-67)
 Issue: Phase 2 acceptance says every trace field should point to `{input_field, formula, index_ref, bill_line_ref}`. The current trace only stores rendered values plus quarter/base-month metadata. It does not identify which input field populated a component, which formula variant was used, or which source line/item produced the deduction.
 Risk: Phase 3/7 cannot reliably expose cell-level provenance from the engine result even though the interface claims it exists. That weakens auditability and increases the chance that the frontend or export layer will re-derive explanations on its own.
 Suggested fix: Expand the trace schema now to include formula identifiers, index series/month references, and source field/item references for W deductions and each component. If that structure is intentionally deferred, lower the acceptance claim in `TASKS.md` instead of returning a misleading trace shape.
+
+## P3-PRE-REVIEW — 2026-05-16
+
+Verified against `REFERENCES/GCC_April-2022ACS14.07.2022-PVCClause.pdf`: GCC 46A.9(1) clearly makes TMT/rebar its own SL1 category, GCC 46A.9(1) SL4 clearly defines “other sections” as the average of SL1/SL2/SL3, and GCC 46A.9(2) matches the 16-zone mapping used in migration 010. The Bill-2 fixture arithmetic also checks out: `avg(56700, 56800, 56500) = 56666.67`, which yields `expected.total_pvc = 76959.55`; the old direct `56900` path reproduces the prior `77565.84`. I could not independently verify the physical workbook itself because it is not present in the repo.
+
+### P3-PRE-01
+Severity: CRITICAL
+File: `engine/types.py` (lines 49-55), `README.md` (line 84)
+Issue: `BillPayload.steel_tmt_amount` was introduced to represent GCC 46A.9(1) SL1 (“Reinforcement bars and other rounds”), but it defaults silently to `Decimal("0")`. That means any Phase 3 mapper that forgets to populate the new field will still produce a valid engine payload and a plausible PVC number, while omitting a mandatory steel bucket entirely. This directly contradicts the project rule “Missing input → run blocked. No silent defaults.”
+Suggested fix: Make `steel_tmt_amount` required. If backward compatibility is temporarily necessary, add an explicit compatibility gate that rejects payloads missing `steel_tmt_amount` whenever the source contract contains any `contract_items.steel_subtype = 'tmt'`.
+
+### P3-PRE-02
+Severity: CRITICAL
+File: `backend/migrations/versions/009_rls_policies.py` (lines 226-245)
+Issue: The migration comment says `index_series` / `index_observations` are shared global data and that writes are “restricted to the service role only”, but the actual policies grant `INSERT` and `UPDATE` on `index_observations` to any authenticated user via `auth.uid() IS NOT NULL`. Because these tables are global, not tenant-scoped, one tenant can alter the price index history used for every other tenant’s PVC calculations. This is a cross-tenant data integrity break and can silently change approved or future PVC numbers.
+Suggested fix: Remove authenticated `INSERT`/`UPDATE` policies from `index_observations`. If Phase 3 needs manual observation entry, route it through a trusted backend/service-role path or introduce an explicit admin role policy; do not leave shared index data writable by ordinary authenticated users.
+
+### P3-PRE-03
+Severity: HIGH
+File: `backend/migrations/versions/009_rls_policies.py` (lines 264-278), `README.md` (lines 90-92)
+Issue: `pvc_runs` has a broad tenant-wide `UPDATE` policy even though the product contract says “Once a PVC run is approved it cannot be modified.” API-layer immutability in Phase 3 is not an adequate backstop here: with Supabase, any client path that can issue updates under the caller’s JWT can still mutate tenant-owned `pvc_runs` rows directly at the database layer, including approved runs, unless the database itself blocks it.
+Suggested fix: Enforce immutability in the database. Either remove the general `UPDATE` policy and perform approval through a controlled function, or add a trigger/check that rejects updates once `status = 'Approved'` (and ideally restricts post-creation mutations more narrowly than “any update by tenant”).
+
+### P3-PRE-04
+Severity: HIGH
+File: `backend/migrations/versions/010_railway_zone.py` (lines 38-40), `TASKS.md` (lines 47, 82, 89)
+Issue: `contracts.railway_zone` is added as nullable, with no backfill and no corresponding requirement in the current P3-002 contract-create acceptance. But P1-011 and P3-009 explicitly make zone selection part of JPC snapshot selection. That leaves a straight-line failure mode for Phase 3: create a contract without `railway_zone`, then fail later when building the zone-specific JPC snapshot for a PVC run.
+Suggested fix: Make `railway_zone` mandatory before Phase 3 contract APIs ship. Backfill existing contracts, add API validation in P3-002 returning `422` when `railway_zone` is omitted, and then tighten the column to `NOT NULL` once the backfill is complete.
+
+### P3-PRE-05
+Severity: LOW
+File: `engine/components.py` (lines 171-187)
+Issue: `_steel_bucket_pvc()` now accepts `str | list[str]` for the commodity series and correctly blocks when one required series is missing, but it does not defend against an empty list. A future caller passing `[]` will hit a division-by-zero path at `len(commodity_series)` instead of returning a normal validation error.
+Suggested fix: Guard `if not commodity_series:` and return an explicit error such as `empty commodity series list for steel bucket` before attempting the average.
+
+---
+
+## P3-PRE-REVIEW — CC-S Responses (2026-05-16)
+
+### P3-PRE-01 — Fixed
+
+`BillPayload.steel_tmt_amount` default removed; field is now required. Any caller that omits it will get a Pydantic `ValidationError` (field required) at payload construction, consistent with the project rule "Missing input → run blocked. No silent defaults." All test helpers (`test_calculator.py::_bill`, `test_import.py`) updated to pass `steel_tmt_amount` explicitly. Real-tender fixture JSONs already included the field.
+
+Tests: existing 91 tests still pass; no regression.
+
+### P3-PRE-02 — Fixed
+
+`index_observations_insert` and `index_observations_update` RLS policies dropped in migration `011`. Only `SELECT` remains for authenticated users. The service role (used by seed scripts and backend admin paths) bypasses RLS entirely, so write access is preserved for authorised infrastructure without creating a policy that any JWT-bearing client can exploit.
+
+Migration: `backend/migrations/versions/011_security_hardening.py`.
+
+### P3-PRE-03 — Fixed
+
+A `BEFORE UPDATE` trigger (`trg_pvc_runs_immutable_approved` / `prevent_approved_run_update()`) added in migration `011`. It raises `check_violation` if `OLD.status = 'Approved'`, blocking mutations at the DB layer regardless of the calling path. The existing tenant-scoped `UPDATE` RLS policy is retained for pre-approval state transitions (Draft → Calculated → Approved); the trigger is the backstop once the run is locked.
+
+Migration: `backend/migrations/versions/011_security_hardening.py`.
+
+### P3-PRE-04 — Fixed
+
+Migration `011` backfills `contracts.railway_zone = 'NR'` for any NULL rows, then sets the column `NOT NULL`. The backfill is a placeholder — prod deployments must correct values before running PVC calculations. The CLAUDE.md KU-006 section already documents the zone→city mapping. API validation (`railway_zone` required in the P3-002 contract-create endpoint) is recorded as a Phase 3 acceptance criterion in TASKS.md.
+
+Migration: `backend/migrations/versions/011_security_hardening.py`.
+
+### P3-PRE-05 — Fixed
+
+Guard `if not commodity_series: return None, None, None, ["empty commodity series list for steel bucket"]` added at the top of the list branch in `_steel_bucket_pvc()` (`engine/components.py`). New test: `TestSteelComponents::test_empty_commodity_series_list_returns_error`.
+
+Tests: 91 passing (includes new test).

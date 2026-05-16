@@ -20,7 +20,7 @@ Next.js 14 (App Router) + TypeScript · FastAPI (Python) · Supabase (Postgres +
 ## Critical Domain Rules
 
 **W derivation (never default):**
-`W = OnAccountBill − Cement − SteelAngles − SteelPlates − SteelOther − TechWithheld − ExcludedExtraItems`
+`W = OnAccountBill − Cement − SteelAngles − SteelPlates − SteelTMT − SteelOther − TechWithheld − ExcludedExtraItems`
 Any missing eligibility decision must block the run — never assume included or excluded.
 
 **Quarter mapping:** `measurement_date` = "To" date of MB period. Calendar quarters Q1=Jan-Mar, Q2=Apr-Jun, Q3=Jul-Sep, Q4=Oct-Dec within Indian FY (Apr-Mar). Format: `Q2-FY2025-26`. Stored as immutable field on every PVC run, never re-derived.
@@ -40,6 +40,9 @@ Any missing eligibility decision must block the run — never assume included or
 - KU-001 ✓: Calendar quarter Q2=Apr-Jun etc; "To" date is anchor. Verify non-WR zones before templating zone rules.
 - KU-002 ✓: Extra NS items in W subtraction are intentional (eligible=False). Engine blocks on eligible=None.
 - KU-003 ✓: Negative PVC → zero-floor + `negative_carry_forward` stored for recovery on next bill.
+- KU-004 ✓: TMT/rebar (SL1) is its own JPC series — separate W bucket, separate index. Not merged with steel_other.
+- KU-005 ✓: steel_other (SL4) commodity index = avg(JPC_tmt, JPC_angles, JPC_plates) — no standalone series.
+- KU-006 ✓: GCC 46A.9(2) JPC city by zone: NR/NCR/NWR/NER→Delhi, ER/ECR/ECOR/NFR/SER/SECR→Kolkata, CR/WR/WCR→Mumbai, SR/SCR/SWR→Chennai. Stored on contracts.railway_zone (migration 010).
 
 ## Collaboration
 
@@ -52,6 +55,12 @@ Three agents, hard boundaries:
 | **CODEX-S** (Codex Saqlain) | Adversarial reviews → `REVIEW.md` | All code files |
 
 **Merge rule:** `shubham/phase-3` does not merge to main until CC-S clears all CRITICAL/HIGH findings from P2-REVIEW. `REVIEW.md` is the async handoff — both sides write there.
+
+## Session Logging Protocol
+
+After every work session, update all five locations:
+- **Repo:** `SESSION_LOG.md` (append dated section), `TASKS.md` (mark done, add surfaced tasks)
+- **Vault:** `04-logs/sessions/YYYY-MM-DD.md` (session entry), `01-projects/RailPVC.md` (phase status + KUs + open debt), `00-meta/top-of-mind.md` (priorities)
 
 ## Vault
 

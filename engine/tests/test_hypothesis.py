@@ -17,6 +17,7 @@ def _make_bill(
     cement: Decimal,
     angles: Decimal,
     plates: Decimal,
+    tmt: Decimal,
     steel_other: Decimal,
     tech_withheld: Decimal,
     excluded_extra: Decimal,
@@ -26,6 +27,7 @@ def _make_bill(
         cement_amount=cement,
         steel_angles_amount=angles,
         steel_plates_amount=plates,
+        steel_tmt_amount=tmt,
         steel_other_amount=steel_other,
         technical_withheld=tech_withheld,
         extra_item_decisions=[
@@ -41,17 +43,21 @@ def _make_bill(
     cement=_SMALL_DEC,
     angles=_SMALL_DEC,
     plates=_SMALL_DEC,
+    tmt=_SMALL_DEC,
     steel_other=_SMALL_DEC,
     tech_withheld=_SMALL_DEC,
     excluded_extra=_SMALL_DEC,
 )
 @settings(max_examples=200)
-def test_sum_identity(on_account, cement, angles, plates, steel_other, tech_withheld, excluded_extra):
-    """W + all deductions == on_account_amount (no loss of money)."""
-    bill = _make_bill(on_account, cement, angles, plates, steel_other, tech_withheld, excluded_extra)
+def test_sum_identity(on_account, cement, angles, plates, tmt, steel_other, tech_withheld, excluded_extra):
+    """W + all deductions == on_account_amount (no loss of money, all four steel buckets)."""
+    bill = _make_bill(on_account, cement, angles, plates, tmt, steel_other, tech_withheld, excluded_extra)
     d, errs = derive_w(bill)
     assert errs == []
-    total = d.w + d.cement + d.steel_angles + d.steel_plates + d.steel_other + d.technical_withheld + d.extra_items
+    total = (
+        d.w + d.cement + d.steel_angles + d.steel_plates
+        + d.steel_tmt + d.steel_other + d.technical_withheld + d.extra_items
+    )
     assert total == on_account
 
 
@@ -60,13 +66,14 @@ def test_sum_identity(on_account, cement, angles, plates, steel_other, tech_with
     cement=_SMALL_DEC,
     angles=_SMALL_DEC,
     plates=_SMALL_DEC,
+    tmt=_SMALL_DEC,
     steel_other=_SMALL_DEC,
     tech_withheld=_SMALL_DEC,
 )
 @settings(max_examples=200)
-def test_w_at_most_on_account(on_account, cement, angles, plates, steel_other, tech_withheld):
+def test_w_at_most_on_account(on_account, cement, angles, plates, tmt, steel_other, tech_withheld):
     """W ≤ on_account_amount when all deductions are non-negative."""
-    bill = _make_bill(on_account, cement, angles, plates, steel_other, tech_withheld, Decimal("0"))
+    bill = _make_bill(on_account, cement, angles, plates, tmt, steel_other, tech_withheld, Decimal("0"))
     d, errs = derive_w(bill)
     assert errs == []
     assert d.w <= on_account
@@ -77,13 +84,14 @@ def test_w_at_most_on_account(on_account, cement, angles, plates, steel_other, t
     cement=_SMALL_DEC,
     angles=_SMALL_DEC,
     plates=_SMALL_DEC,
+    tmt=_SMALL_DEC,
     steel_other=_SMALL_DEC,
     tech_withheld=_SMALL_DEC,
 )
 @settings(max_examples=200)
-def test_w_derivation_is_deterministic(on_account, cement, angles, plates, steel_other, tech_withheld):
+def test_w_derivation_is_deterministic(on_account, cement, angles, plates, tmt, steel_other, tech_withheld):
     """Same inputs always produce the same W."""
-    bill = _make_bill(on_account, cement, angles, plates, steel_other, tech_withheld, Decimal("0"))
+    bill = _make_bill(on_account, cement, angles, plates, tmt, steel_other, tech_withheld, Decimal("0"))
     d1, _ = derive_w(bill)
     d2, _ = derive_w(bill)
     assert d1.w == d2.w
@@ -98,6 +106,7 @@ def test_undecided_item_always_blocks(extra):
         cement_amount=Decimal("0"),
         steel_angles_amount=Decimal("0"),
         steel_plates_amount=Decimal("0"),
+        steel_tmt_amount=Decimal("0"),
         steel_other_amount=Decimal("0"),
         technical_withheld=Decimal("0"),
         extra_item_decisions=[ExtraItemDecision(item_id="X", amount=extra, eligible=None)],

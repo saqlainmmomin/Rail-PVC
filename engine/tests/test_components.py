@@ -5,6 +5,7 @@ from datetime import date
 import pytest
 
 from engine.components import (
+    _steel_bucket_pvc,
     compute_cement_component,
     compute_general_w_components,
     compute_steel_components,
@@ -69,6 +70,7 @@ def _derivation(
     cement: str = "0",
     angles: str = "0",
     plates: str = "0",
+    tmt: str = "0",
     other: str = "0",
 ) -> WDerivation:
     return WDerivation(
@@ -76,6 +78,7 @@ def _derivation(
         cement=Decimal(cement),
         steel_angles=Decimal(angles),
         steel_plates=Decimal(plates),
+        steel_tmt=Decimal(tmt),
         steel_other=Decimal(other),
         technical_withheld=Decimal("0"),
         extra_items=Decimal("0"),
@@ -231,13 +234,33 @@ class TestSteelComponents:
         c = next(c for c in components if c.category == "steel_plates")
         assert c.base_index == _BASE_INDICES["steel_plates"]
 
-    def test_steel_other_uses_other_sections_commodity(self):
+    def test_tmt_bucket_uses_steel_tmt_series(self):
+        snap = _snapshot(_Q2_MONTHS, _Q2_AVGS)
+        d = _derivation(tmt="150000")
+        components, errs = compute_steel_components(d, snap, _Q2_MONTHS)
+        assert errs == []
+        c = next(c for c in components if c.category == "steel_tmt")
+        assert c.eligible_amount == Decimal("150000")
+        assert c.base_index == _BASE_INDICES["steel_tmt"]
+        assert c.current_avg_index == _Q2_AVGS["steel_tmt"]
+
+    def test_steel_other_uses_derived_avg_of_three_series(self):
+        """GCC 46A.9 SL4: other_sections SB/SQ = avg(tmt + angles + plates)."""
         snap = _snapshot(_Q2_MONTHS, _Q2_AVGS)
         d = _derivation(other="100000")
         components, errs = compute_steel_components(d, snap, _Q2_MONTHS)
         assert errs == []
         c = next(c for c in components if c.category == "steel_other")
-        assert c.base_index == _BASE_INDICES["steel_other_sections"]
+        # Base: avg(57812.5, 58000.0, 57370.0) / 3 = 57727.5
+        expected_base = (
+            _BASE_INDICES["steel_tmt"] + _BASE_INDICES["steel_angles"] + _BASE_INDICES["steel_plates"]
+        ) / Decimal("3")
+        assert c.base_index == expected_base
+        # Quarter: avg(57000.0, 57500.0, 57000.0) / 3 = 57166.666...
+        expected_avg = (
+            _Q2_AVGS["steel_tmt"] + _Q2_AVGS["steel_angles"] + _Q2_AVGS["steel_plates"]
+        ) / Decimal("3")
+        assert c.current_avg_index == expected_avg
 
     def test_zero_bucket_omitted(self):
         snap = _snapshot(_Q2_MONTHS, _Q2_AVGS)
@@ -246,6 +269,7 @@ class TestSteelComponents:
         cats = {c.category for c in components}
         assert "steel_plates" not in cats
         assert "steel_other" not in cats
+        assert "steel_tmt" not in cats
 
     def test_missing_commodity_index_returns_error(self):
         snap = IndexSnapshot(base_month=_BASE, series={
@@ -258,3 +282,15 @@ class TestSteelComponents:
         d = _derivation(angles="100000")
         _, errs = compute_steel_components(d, snap, _Q2_MONTHS)
         assert len(errs) >= 1
+
+    def test_empty_commodity_series_list_returns_error(self):
+        """P3-PRE-05: empty list must return an explicit error, not divide by zero."""
+        snap = _snapshot(_Q2_MONTHS, _Q2_AVGS)
+        base, avg, pvc, errs = _steel_bucket_pvc(
+            Decimal("100000"), [], snap, _Q2_MONTHS
+        )
+        assert base is None
+        assert avg is None
+        assert pvc is None
+        assert len(errs) == 1
+        assert "empty commodity series list" in errs[0]

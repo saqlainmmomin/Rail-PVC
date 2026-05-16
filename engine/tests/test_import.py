@@ -14,6 +14,7 @@ def test_calculate_pvc_returns_result():
         cement_amount=Decimal("0"),
         steel_angles_amount=Decimal("0"),
         steel_plates_amount=Decimal("0"),
+        steel_tmt_amount=Decimal("0"),
         steel_other_amount=Decimal("0"),
         technical_withheld=Decimal("0"),
         extra_item_decisions=[],

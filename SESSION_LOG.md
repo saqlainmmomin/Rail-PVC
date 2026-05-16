@@ -244,3 +244,117 @@ CC-S responded to all CRITICAL/HIGH findings in `REVIEW.md`. P2-06 (MEDIUM) was 
 - **P2-06 (trace provenance contract)** — deferred this session per brief. Decision: either expand trace schema to include `{input_field, formula, index_ref, bill_line_ref}` per field, or downgrade the acceptance claim in `TASKS.md`. Pick one before Phase 7 (results UI) starts; Phase 3 doesn't strictly need richer trace.
 - **RLS migration 009** — still not in git (P1-010-ALEMBIC). Must land before `shubham/phase-3` merges.
 - **TMT bucket confirmation** — still pending Saqlain's domain input. Does not block engine merge, but determines whether `steel_tmt`/`steel_other_sections` split matters for the workbook.
+
+---
+
+## Session 3 — 2026-05-16 (GCC analysis + engine fixes + migrations)
+
+### Context
+
+GCC PDF analysis before Shubham begins Phase 3. Two items highlighted from the plan: P2-06 trace decision and P1-010-ALEMBIC RLS migration. Expanded to four items after GCC PDF confirmed domain gaps in the engine.
+
+### GCC 46A.9 — new domain confirmations
+
+Analyzed `REFERENCES/GCC_April-2022ACS14.07.2022-PVCClause.pdf`:
+
+- **KU-004 ✓**: TMT/rebar is SL1 — its own JPC series (`steel_tmt`), separate W subtraction bucket. Was previously incorrectly routed to the `steel_other` bucket.
+- **KU-005 ✓**: Other sections is SL4 — commodity index = `avg(JPC_tmt, JPC_angles, JPC_plates)` per GCC 46A.9. No standalone series. Engine was looking up a non-existent `steel_other_sections` series — fixed.
+- **KU-006 ✓**: GCC 46A.9(2) — JPC city by Railway zone: NR/NCR/NWR/NER → Delhi; ER/ECR/ECOR/NFR/SER/SECR → Kolkata; CR/WR/WCR → Mumbai; SR/SCR/SWR → Chennai. Added `railway_zone` ENUM to contracts.
+
+### What was built
+
+**Migration 009 (RLS policies)** — `backend/migrations/versions/009_rls_policies.py`
+- RLS for all 17 tables; `get_tenant_id()` SECURITY DEFINER function
+- Three subquery patterns: `_VIA_CONTRACTS`, `_VIA_BILLS`, `_VIA_RUNS`
+- `revision_snapshots`: INSERT + SELECT only — DB-enforced append-only
+- Closes P1-010-ALEMBIC ✅
+
+**Migration 010 (railway_zone)** — `backend/migrations/versions/010_railway_zone.py`
+- `railway_zone` PostgreSQL ENUM with 16 zone codes
+- Nullable column on `contracts` — existing rows unaffected
+- P3-009 (pvc-run endpoint) must use zone to select the correct JPC city observations
+
+**Engine: steel_tmt bucket** — `engine/types.py`, `engine/w_derivation.py`
+- `BillPayload.steel_tmt_amount` added (default `Decimal("0")` for backward compat)
+- `WDerivation.steel_tmt` added
+- `_SUBTYPE_TO_BUCKET["tmt"]` → `"steel_tmt"` (was `"steel_other"`)
+- Carry-forward additions dict and W formula both include `steel_tmt` separately
+
+**Engine: steel_other SL4 derived formula** — `engine/components.py`
+- `_STEEL_BUCKET_COMMODITY_SERIES["steel_other"]` = `["steel_tmt", "steel_angles", "steel_plates"]`
+- `_steel_bucket_pvc` extended to accept `str | list[str]` — list case averages all named series for base and quarter
+
+**Tests** — 90 passing (was 88)
+- New: `test_tmt_maps_to_steel_tmt_bucket`, `test_all_four_steel_buckets`, `test_tmt_bucket_uses_steel_tmt_series`, `test_steel_other_uses_derived_avg_of_three_series`
+- `test_hypothesis.py` sum identity updated to include `d.steel_tmt`
+
+**BCT-24-25-252 bill-2 fixture** — `expected.total_pvc` corrected from `77565.84` → `76959.55`
+- Q4 SL4 avg: `(56700+56800+56500)/3 = 56666.67` (GCC-correct) vs old `56900` (wrong standalone series value)
+- `notes.workbook_divergence` updated to document both divergences from physical workbook
+
+### Design decisions
+
+1. **`steel_tmt_amount` defaults to `Decimal("0")`** — backward compat for existing API calls not yet passing TMT amounts. Engine will produce a valid result; the zero default means no TMT W subtraction until the UI passes real values.
+
+2. **`_steel_bucket_pvc` list branch averages before computing ΔI/I₀** — the GCC formula says SL4's SB/SQ = average of SL1+SL2+SL3, not a weighted sum. The averaging is on the index values themselves, not on the PVC component results.
+
+3. **Migration 010 is nullable** — Railway zone is not known at contract creation time in all cases (some contractors work across zones). Engine zone-awareness deferred to P3-009.
+
+### Open items carried forward
+
+- P2-06 (trace provenance) — still deferred, decide before Phase 7
+- JPC zone-specific queries — P3-009 must use `contracts.railway_zone` to filter `index_series` by city
+- RBI historical seed — Apr-2022 to Nov-2024 still missing
+
+---
+
+## P3-PRE-REVIEW Response — 2026-05-16 (CC-S)
+
+### What was done
+
+CC-S addressed all 5 P3-PRE-REVIEW findings. All CRITICAL and HIGH issues resolved before Phase 3 API starts.
+
+| ID | Severity | Status |
+|---|---|---|
+| P3-PRE-01 | CRITICAL | ✅ Fixed |
+| P3-PRE-02 | CRITICAL | ✅ Fixed |
+| P3-PRE-03 | HIGH | ✅ Fixed |
+| P3-PRE-04 | HIGH | ✅ Fixed |
+| P3-PRE-05 | LOW | ✅ Fixed |
+
+### Files changed
+
+- `engine/types.py` — `BillPayload.steel_tmt_amount` default removed; field is now required. Omitting it raises a Pydantic `ValidationError`.
+- `engine/components.py` — `_steel_bucket_pvc()` now returns an explicit error for an empty commodity-series list instead of dividing by zero.
+- `engine/tests/test_calculator.py` — `_bill()` helper updated to include explicit `tmt` parameter.
+- `engine/tests/test_import.py` — `BillPayload` constructor updated to include `steel_tmt_amount`.
+- `engine/tests/test_components.py` — new test `test_empty_commodity_series_list_returns_error`.
+- `backend/migrations/versions/011_security_hardening.py` — new migration covering:
+  - P3-PRE-02: drops INSERT/UPDATE policies on `index_observations` (SELECT-only for auth users)
+  - P3-PRE-03: BEFORE UPDATE trigger `trg_pvc_runs_immutable_approved` blocks mutations on Approved runs at DB layer
+  - P3-PRE-04: backfills `contracts.railway_zone` NULLs → 'NR', then sets NOT NULL
+- `TASKS.md` — P1-012 task added (migration 011); P3-002 updated to require `railway_zone` field in contract create API.
+- `REVIEW.md` — CC-S response section added under P3-PRE-REVIEW.
+
+### Verification
+
+- 91 engine tests passing (90 existing + 1 new), 0 failing.
+- GCC behavior preserved: TMT is SL1 (separate bucket), steel_other is SL4 (avg of SL1+SL2+SL3), Bill-2 fixture arithmetic unchanged.
+
+### Design decisions
+
+1. **P3-PRE-01 — remove default, don't add compatibility shim.** Phase 3 API hasn't shipped yet. Making the field required now is cleaner than a gate that would need to be removed later. All test helpers updated to pass it explicitly.
+
+2. **P3-PRE-02 — drop policies, don't narrow them.** There is no legitimate reason for an ordinary authenticated user to write shared index history. The service role bypasses RLS, so infrastructure (seed scripts, admin ops) is unaffected.
+
+3. **P3-PRE-03 — trigger, not policy narrowing.** The existing tenant-scoped UPDATE policy is still needed for pre-approval transitions. The trigger fires after that gate and blocks only the `Approved` case. This is belt-and-suspenders: even a service-role or direct connection cannot mutate an approved run without the trigger firing.
+
+4. **P3-PRE-04 — backfill 'NR' as placeholder + NOT NULL.** No real contracts exist yet in dev. The 'NR' backfill is documented as a placeholder; prod deployments must correct values before running PVC calculations. The NOT NULL constraint now enforces this for all new contracts.
+
+5. **P3-PRE-05 — minimal guard before the division.** The list branch already handles missing series; adding an empty-list check at the very top is the minimal change that prevents a silent div-by-zero.
+
+### Open items carried forward
+
+- P2-06 (trace provenance) — deferred, decide before Phase 7
+- P3-002 `railway_zone` API validation — Phase 3 (CC-SH) must enforce 422 on missing zone
+- RBI historical seed — Apr-2022 to Nov-2024 still missing

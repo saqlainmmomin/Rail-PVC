@@ -51,7 +51,8 @@ class BillPayload(BaseModel):
     cement_amount: Decimal
     steel_angles_amount: Decimal
     steel_plates_amount: Decimal
-    steel_other_amount: Decimal
+    steel_tmt_amount: Decimal                   # GCC 46A.9 SL1 — TMT/rebar items (required; zero must be explicit)
+    steel_other_amount: Decimal                 # GCC 46A.9 SL4 — other sections
     technical_withheld: Decimal
     extra_item_decisions: list[ExtraItemDecision]  # P2-004: eligible=None blocks run
     carry_forwards: list[CarryForwardPayload]
@@ -106,7 +107,8 @@ class WDerivation(BaseModel):
     cement: Decimal
     steel_angles: Decimal
     steel_plates: Decimal
-    steel_other: Decimal
+    steel_tmt: Decimal      # GCC 46A.9 SL1 — TMT/rebar items
+    steel_other: Decimal    # GCC 46A.9 SL4 — other sections
     technical_withheld: Decimal
     extra_items: Decimal  # sum of excluded (eligible=False) extra item amounts
     w: Decimal

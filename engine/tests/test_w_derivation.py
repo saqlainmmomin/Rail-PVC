@@ -14,6 +14,7 @@ def _bill(
     cement: str = "0",
     angles: str = "0",
     plates: str = "0",
+    tmt: str = "0",
     steel_other: str = "0",
     tech_withheld: str = "0",
     extra_decisions: list[ExtraItemDecision] | None = None,
@@ -24,6 +25,7 @@ def _bill(
         cement_amount=Decimal(cement),
         steel_angles_amount=Decimal(angles),
         steel_plates_amount=Decimal(plates),
+        steel_tmt_amount=Decimal(tmt),
         steel_other_amount=Decimal(steel_other),
         technical_withheld=Decimal(tech_withheld),
         extra_item_decisions=extra_decisions or [],
@@ -93,15 +95,22 @@ class TestSteelSubtraction:
         assert errs == []
         assert d.w == Decimal("1900000")
 
-    def test_all_three_steel_buckets(self):
+    def test_tmt_only(self):
+        d, errs = derive_w(_bill(on_account="2000000", tmt="150000"))
+        assert errs == []
+        assert d.w == Decimal("1850000")
+        assert d.steel_tmt == Decimal("150000")
+
+    def test_all_four_steel_buckets(self):
         d, errs = derive_w(_bill(
             on_account="5000000",
             angles="300000",
             plates="200000",
+            tmt="150000",
             steel_other="100000",
         ))
         assert errs == []
-        assert d.w == Decimal("4400000")
+        assert d.w == Decimal("4250000")
 
     def test_subtypes_are_independent(self):
         d_a, _ = derive_w(_bill(on_account="1000000", angles="100000"))
@@ -198,12 +207,15 @@ class TestCarryForwardProration:
         expected_ratio = Decimal("5600") / Decimal("6172.57")
         assert additions["steel_angles"] == Decimal("100000") * expected_ratio
         assert additions["steel_plates"] == Decimal("0")
+        assert additions["steel_tmt"] == Decimal("0")
         assert additions["steel_other"] == Decimal("0")
 
-    def test_tmt_maps_to_steel_other_bucket(self):
+    def test_tmt_maps_to_steel_tmt_bucket(self):
+        """GCC 46A.9 SL1: TMT is its own bucket, not merged with other_sections."""
         cf = _cf("1", "100", "90", "0.9", "10", "50000", subtype="tmt")
         additions = prorate_carry_forwards([cf])
-        assert additions["steel_other"] == Decimal("50000") * Decimal("0.9")
+        assert additions["steel_tmt"] == Decimal("50000") * Decimal("0.9")
+        assert additions["steel_other"] == Decimal("0")
         assert additions["steel_angles"] == Decimal("0")
 
     def test_no_steel_subtype_does_not_affect_buckets(self):
@@ -241,19 +253,20 @@ class TestCarryForwardProration:
         assert d_with_cf.w == d_no_cf.w
 
     def test_sum_identity(self):
-        """W + all deductions == on_account_amount."""
+        """W + all deductions == on_account_amount (all four steel buckets)."""
         d, _ = derive_w(_bill(
             on_account="8903877.99",
             cement="300000",
             angles="200000",
             plates="150000",
+            tmt="70000",
             steel_other="80000",
             tech_withheld="100000",
             extra_decisions=[ExtraItemDecision(item_id="E1", amount=Decimal("50000"), eligible=False)],
         ))
         total = (
             d.w + d.cement + d.steel_angles + d.steel_plates
-            + d.steel_other + d.technical_withheld + d.extra_items
+            + d.steel_tmt + d.steel_other + d.technical_withheld + d.extra_items
         )
         assert total == Decimal("8903877.99")
 

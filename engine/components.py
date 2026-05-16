@@ -2,7 +2,8 @@
 
 Series names as stored in IndexSnapshot.series (matching seed data):
   RBI: labour, plant_machinery, fuel, other_materials, cement
-  JPC: steel_tmt, steel_angles, steel_plates, steel_other_sections
+  JPC: steel_tmt, steel_angles, steel_plates
+       (steel_other / SL4 commodity index is DERIVED as avg of the three — not seeded)
 """
 from __future__ import annotations
 
@@ -23,10 +24,13 @@ _STEEL_SUB_WEIGHTS: dict[str, Decimal] = {
 }
 assert sum(_STEEL_SUB_WEIGHTS.values()) == Decimal("0.85")
 
-_STEEL_BUCKET_COMMODITY_SERIES: dict[str, str] = {
+# GCC 46A.9: SL1=tmt, SL2=angles, SL3=plates each use their own JPC series.
+# SL4 (other_sections / "steel_other" in DB enum) SB/SQ = average of SL1+SL2+SL3.
+_STEEL_BUCKET_COMMODITY_SERIES: dict[str, str | list[str]] = {
+    "steel_tmt":    "steel_tmt",
     "steel_angles": "steel_angles",
     "steel_plates": "steel_plates",
-    "steel_other":  "steel_other_sections",  # covers both other_sections and tmt
+    "steel_other":  ["steel_tmt", "steel_angles", "steel_plates"],  # GCC 46A.9 SL4: derived
 }
 
 _COMMON_SERIES: dict[str, str] = {
@@ -140,13 +144,16 @@ def compute_cement_component(
 
 def _steel_bucket_pvc(
     bucket_amount: Decimal,
-    commodity_series: str,
+    commodity_series: str | list[str],
     snapshot: IndexSnapshot,
     quarter_months: list[str],
 ) -> tuple[Decimal | None, Decimal | None, Decimal | None, list[str]]:
     """
     Returns (base_commodity_idx, avg_commodity_idx, pvc_value, errors).
     pvc_value = bucket × sum_over_sub_components(weight × ΔI/I₀).
+
+    commodity_series may be a single series name or a list of series to average
+    (used for steel_other_sections per GCC 46A.9 SL4).
     """
     errors: list[str] = []
     pvc = Decimal("0")
@@ -160,14 +167,35 @@ def _steel_bucket_pvc(
             return None, None, None, errors
         pvc += bucket_amount * weight * _index_change(base_idx, avg_idx)
 
-    base_comm = _base_value(snapshot, commodity_series)
-    avg_comm = _quarter_avg(snapshot, commodity_series, quarter_months)
-    if base_comm is None:
-        errors.append(f"missing base index: series='{commodity_series}'")
-        return None, None, None, errors
-    if avg_comm is None:
-        errors.append(f"missing quarter index: series='{commodity_series}' months={quarter_months}")
-        return None, None, None, errors
+    # Commodity component — single series or derived average (GCC 46A.9 SL4)
+    if isinstance(commodity_series, list):
+        if not commodity_series:
+            return None, None, None, ["empty commodity series list for steel bucket"]
+        base_vals: list[Decimal] = []
+        avg_vals: list[Decimal] = []
+        for s in commodity_series:
+            bv = _base_value(snapshot, s)
+            av = _quarter_avg(snapshot, s, quarter_months)
+            if bv is None:
+                errors.append(f"missing base index: series='{s}' (other_sections commodity avg)")
+                return None, None, None, errors
+            if av is None:
+                errors.append(f"missing quarter index: series='{s}' months={quarter_months} (other_sections commodity avg)")
+                return None, None, None, errors
+            base_vals.append(bv)
+            avg_vals.append(av)
+        n = Decimal(str(len(commodity_series)))
+        base_comm = sum(base_vals, Decimal("0")) / n
+        avg_comm = sum(avg_vals, Decimal("0")) / n
+    else:
+        base_comm = _base_value(snapshot, commodity_series)
+        avg_comm = _quarter_avg(snapshot, commodity_series, quarter_months)
+        if base_comm is None:
+            errors.append(f"missing base index: series='{commodity_series}'")
+            return None, None, None, errors
+        if avg_comm is None:
+            errors.append(f"missing quarter index: series='{commodity_series}' months={quarter_months}")
+            return None, None, None, errors
 
     pvc += bucket_amount * _STEEL_SUB_WEIGHTS["commodity"] * _index_change(base_comm, avg_comm)
     return base_comm, avg_comm, pvc, []
@@ -182,6 +210,7 @@ def compute_steel_components(
     errors: list[str] = []
 
     buckets = {
+        "steel_tmt":    derivation.steel_tmt,
         "steel_angles": derivation.steel_angles,
         "steel_plates": derivation.steel_plates,
         "steel_other":  derivation.steel_other,
