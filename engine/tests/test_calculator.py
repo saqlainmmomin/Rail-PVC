@@ -289,8 +289,6 @@ class TestEdgeCases:
             item_id="10.2",
             recorded_qty=Decimal("6172.57"),
             paid_qty_source=Decimal("5600"),
-            paid_ratio=Decimal("0.9072"),
-            carry_qty=Decimal("572.57"),
             amount=Decimal("100000"),
             steel_subtype="angles",
         )

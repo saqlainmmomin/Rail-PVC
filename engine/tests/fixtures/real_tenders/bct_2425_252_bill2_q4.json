@@ -1,0 +1,106 @@
+{
+  "bill": {
+    "on_account_amount": "7250000.00",
+    "cement_amount": "200000.00",
+    "steel_angles_amount": "80000.00",
+    "steel_plates_amount": "60000.00",
+    "steel_other_amount": "300000.00",
+    "technical_withheld": "40000.00",
+    "extra_item_decisions": [],
+    "carry_forwards": [
+      {
+        "item_id": "10.2",
+        "recorded_qty": "6172.57",
+        "paid_qty_source": "5600.00",
+        "amount": "100000.00",
+        "steel_subtype": "angles"
+      }
+    ],
+    "measurement_date": "2025-11-04",
+    "prior_negative_carry_forward": "0"
+  },
+  "indices": {
+    "base_month": "2024-12-01",
+    "series": {
+      "labour": {
+        "2024-12": "143.70",
+        "2025-10": "146.500",
+        "2025-11": "146.500",
+        "2025-12": "146.500"
+      },
+      "plant_machinery": {
+        "2024-12": "160.00",
+        "2025-10": "163.200",
+        "2025-11": "163.200",
+        "2025-12": "163.200"
+      },
+      "fuel": {
+        "2024-12": "160.48",
+        "2025-10": "159.800",
+        "2025-11": "159.800",
+        "2025-12": "159.800"
+      },
+      "other_materials": {
+        "2024-12": "155.70",
+        "2025-10": "158.400",
+        "2025-11": "158.400",
+        "2025-12": "158.400"
+      },
+      "cement": {
+        "2024-12": "130.20",
+        "2025-10": "128.000",
+        "2025-11": "128.000",
+        "2025-12": "128.000"
+      },
+      "steel_angles": {
+        "2024-12": "58000.00",
+        "2025-10": "56800.000",
+        "2025-11": "56800.000",
+        "2025-12": "56800.000"
+      },
+      "steel_plates": {
+        "2024-12": "57370.00",
+        "2025-10": "56500.000",
+        "2025-11": "56500.000",
+        "2025-12": "56500.000"
+      },
+      "steel_other_sections": {
+        "2024-12": "57727.50",
+        "2025-10": "56900.000",
+        "2025-11": "56900.000",
+        "2025-12": "56900.000"
+      },
+      "steel_tmt": {
+        "2024-12": "57812.50",
+        "2025-10": "56700.000",
+        "2025-11": "56700.000",
+        "2025-12": "56700.000"
+      }
+    }
+  },
+  "rules": {
+    "quarter_mode": "measurement_date",
+    "component_weights": {
+      "labour": "0.20",
+      "plant": "0.30",
+      "fuel": "0.15",
+      "materials": "0.20"
+    },
+    "adjustable_fraction": "0.85",
+    "negative_pvc_policy": "zero_floor",
+    "rounding_mode": "round_2"
+  },
+  "notes": {
+    "source_tender": "BCT-24-25-252",
+    "source_bill": "Bill-2",
+    "quarter": "Q4-FY2025-26",
+    "verified_against": "engine-correct value; physical workbook DIVERGES",
+    "workbook_divergence": "The physical workbook used Q2-FY2025-26 indices for a measurement_date of 2025-11-04 (Q4). That is a silent error in the source. The engine correctly resolves Q4 from measurement_date and uses Q4 averages; the expected.total_pvc here pins the CORRECT Q4 result, not the workbook's wrong number.",
+    "scenario": "Q4 bill including a steel carry-forward (90.72% paid_ratio derived from 5600/6172.57)."
+  },
+  "expected": {
+    "total_pvc": "77565.84",
+    "quarter_used": "Q4-FY2025-26",
+    "negative_carry_forward": "0"
+  }
+}

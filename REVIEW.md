@@ -33,6 +33,27 @@ Issue: The “real tender fixture” test is effectively disabled because there 
 Risk: The engine currently has no pinned end-to-end regression proving that current outputs match the trusted workbook inputs for the real tender case. Phase 3 could build on top of a numerically drifting engine without any red test.
 Suggested fix: Add at least the confirmed BCT-24-25-252 Bill-1 and Bill-2 fixtures now, including the intentional Q4-vs-Q2 divergence note for Bill-2, and make the regression test fail when the fixture directory is empty.
 
+## CC Response
+
+### P2-01 — Fixed
+`PVCRuleSet.quarter_mode` narrowed to `Literal["measurement_date"]` in `engine/types.py`. Any persisted rule set carrying `"bill_date"` now fails Pydantic deserialization with a clear schema error instead of silently flowing through and using measurement-date numbers. Rationale: only one mode is domain-valid, so the type system should refuse to represent the other.
+Tests: `TestPVCRuleSetSchema::test_bill_date_quarter_mode_rejected` in `engine/tests/test_w_derivation.py`.
+
+### P2-02 — Fixed
+`PVCRuleSet.component_weights` now requires exactly `{labour, plant, fuel, materials}` via a `field_validator`. Missing keys block at model construction; unknown keys are rejected; an explicit `0` is allowed (distinguishing "weighted to zero" from "accidentally omitted"). `compute_general_w_components` now reads with `[cat]` instead of `.get()` — since the validator guarantees completeness, a missing key would be an internal bug rather than user-input fallthrough.
+Tests: `TestPVCRuleSetSchema::test_missing_component_weight_rejected`, `test_unknown_component_weight_rejected`, `test_explicit_zero_weight_is_allowed`.
+
+### P2-03 / P2-04 — Fixed (combined)
+`CarryForwardPayload` was over-specified — `recorded_qty`, `paid_qty_source`, `paid_ratio`, `carry_qty`, and `amount` could disagree. The model is now minimal: inputs are `recorded_qty` (>0), `paid_qty_source` (0 ≤ x ≤ recorded_qty), `amount` (≥0). `paid_ratio` and `carry_qty` are `@computed_field` properties derived from quantities — they can no longer drift from each other or take impossible values. This makes the P2-04 case (`carry_qty=0` with positive proration) impossible by construction: zero `carry_qty` now requires `paid_qty_source == recorded_qty`, which is the genuine "fully-paid carry-forward" case where attributing the full amount is correct.
+Tests: `TestCarryForwardInvariants` covering rejection of paid > recorded, negative paid, zero recorded, negative amount, plus positive cases for fully-paid and zero-paid records.
+
+### P2-05 — Fixed
+Two regression fixtures added under `engine/tests/fixtures/real_tenders/`:
+- `bct_2425_252_bill1_q2.json` — Q2-FY2025-26, typical on-account bill with cement, steel buckets, excluded NS extra item.
+- `bct_2425_252_bill2_q4.json` — Q4-FY2025-26 with a steel carry-forward; `notes.workbook_divergence` explicitly documents that the physical workbook used Q2 indices for this Q4 measurement and that the expected `total_pvc` pins the **engine's correct Q4 result**, not the workbook's wrong number.
+`test_real_tender_fixtures.py` now **fails** when the fixture directory is empty (previously skipped). A second test asserts that any fixture flagging a workbook divergence must populate `notes.workbook_divergence`, so the divergence documentation can't silently disappear.
+Coverage after changes: 99% (engine package), 88 tests passing.
+
 ## P2-06: Trace Output Does Not Meet The Accepted Provenance Contract
 Severity: MEDIUM
 File: engine/calculator.py (lines 25-67)

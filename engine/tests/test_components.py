@@ -53,10 +53,11 @@ def _snapshot(months: list[str], avgs: dict[str, Decimal]) -> IndexSnapshot:
 
 
 def _rules(weights: dict[str, str] | None = None) -> PVCRuleSet:
-    w = weights or {"labour": "0.20", "plant": "0.30", "fuel": "0.15", "materials": "0.20"}
+    defaults = {"labour": "0", "plant": "0", "fuel": "0", "materials": "0"}
+    merged = {**defaults, **(weights or {"labour": "0.20", "plant": "0.30", "fuel": "0.15", "materials": "0.20"})}
     return PVCRuleSet(
         quarter_mode="measurement_date",
-        component_weights={k: Decimal(v) for k, v in w.items()},
+        component_weights={k: Decimal(v) for k, v in merged.items()},
         adjustable_fraction=Decimal("0.85"),
         negative_pvc_policy="zero_floor",
         rounding_mode="round_2",

@@ -70,8 +70,11 @@ def compute_general_w_components(
     errors: list[str] = []
 
     for cat, series in _COMMON_SERIES.items():
-        weight = rules.component_weights.get(cat)
-        if not weight:
+        # PVCRuleSet enforces that all required keys exist; KeyError here would
+        # mean a bug in the validator, not bad input.
+        weight = rules.component_weights[cat]
+        if weight == Decimal("0"):
+            # Explicit zero — skip cleanly without consuming index lookups.
             continue
 
         base_idx = _base_value(snapshot, series)

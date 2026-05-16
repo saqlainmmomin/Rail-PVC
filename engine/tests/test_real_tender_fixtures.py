@@ -33,7 +33,24 @@ def test_real_tender_fixture_matches_expected_total(path: Path):
     assert result.total_pvc == Decimal(str(expected["total_pvc"]))
 
 
-def test_real_tender_fixture_directory_documented():
-    if _fixture_paths():
-        return
-    pytest.skip("No real tender fixtures added yet. Add JSON files under engine/tests/fixtures/real_tenders/.")
+def test_real_tender_fixture_directory_not_empty():
+    """Phase 2 acceptance requires at least one real-tender regression fixture."""
+    paths = _fixture_paths()
+    assert paths, (
+        "No real-tender fixtures found in engine/tests/fixtures/real_tenders/. "
+        "At least one BCT-24-25-252 fixture (Bill-1/Bill-2) must be present to "
+        "guard against engine-level numeric drift."
+    )
+
+
+def test_real_tender_fixture_documents_divergence_where_present():
+    """Any fixture whose notes claim a workbook divergence must spell it out."""
+    for path in _fixture_paths():
+        data = json.loads(path.read_text())
+        notes = data.get("notes", {})
+        verified = notes.get("verified_against", "")
+        if "DIVERGES" in verified or "diverges" in verified.lower():
+            assert notes.get("workbook_divergence"), (
+                f"{path.name} flags a workbook divergence but does not document it "
+                f"in notes.workbook_divergence"
+            )

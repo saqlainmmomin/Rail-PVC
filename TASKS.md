@@ -8,8 +8,8 @@
 **Blocker protocol:** prepend `BLOCKED: <reason>` to the task and stop. Do not work around it.
 
 **Branch strategy:**
-- `shubham/phase-3` — Shubham's Phase 3 work; do not merge to main until P2-REVIEW CRITICAL/HIGH cleared and CC-S signs off
-- `saqlain/engine-fixes` — CC-S engine fixes from P2-REVIEW findings
+- `shubham/phase-3` — Shubham's Phase 3 work. P2-REVIEW CRITICAL/HIGH cleared on `main` as of 2026-05-16; remaining gate is P2-06 (MEDIUM trace provenance) decision + CC-S sign-off
+- `saqlain/engine-fixes` — landed on `main` 2026-05-16
 - `saqlain/phase-4` — CC-S Phase 4 work; depends on Shubham's P3-001 merging
 
 **Stack:** Next.js 14 + TypeScript · FastAPI (Python) · Supabase (Postgres + Auth + Storage) · engine/ pure Python package
@@ -65,6 +65,7 @@
 | P2-012 | pytest unit tests: all engine functions, 80%+ coverage | [CC-S] | P2-011 | `pytest engine/tests/ --cov=engine --cov-report=term` shows ≥80% | Fixtures: BCT-24-25-252 real values from workbook. Every edge case (zero cement, all-steel bill, carry-forward, negative PVC) must have a test |
 | P2-013 | Hypothesis property tests: W derivation invariants | [CC-S] | P2-012 | Properties: W ≤ on_account_amount; W ≥ 0 if no negative inputs; sum of subtractions + W == on_account_amount | Use hypothesis to generate random BillPayload values |
 | **P2-REVIEW ✓** | **Adversarial engine review** | **[CODEX-S]** | P2-001–P2-013 | REVIEW.md updated with numbered critique. Check: silent defaults in W derivation, missing error states, formula invariants, carry-forward edge cases, quarter boundary ambiguity, negative PVC handling | **Blocks merge of shubham/phase-3 to main.** CC-SH may begin Phase 3 on feature branch in parallel. CC-S must respond to all CRITICAL/HIGH issues before merging either branch. |
+| **P2-REVIEW-FIX ✓** | **CC-S response to P2-REVIEW** | **[CC-S]** | P2-REVIEW | All CRITICAL/HIGH findings fixed in `engine/`; `## CC Response` section in REVIEW.md per finding; tests passing; coverage ≥80% | **Done 2026-05-16.** P2-01/02/03/04/05 resolved. P2-06 (MEDIUM trace provenance) deferred — decision pending before Phase 7. Coverage 99%, 88 tests passing. BCT-24-25-252 Bill-1/Bill-2 fixtures committed. |
 
 ---
 

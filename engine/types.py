@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 
 class ExtraItemDecision(BaseModel):
@@ -14,13 +14,36 @@ class ExtraItemDecision(BaseModel):
 
 
 class CarryForwardPayload(BaseModel):
+    """Steel carry-forward from a prior bill.
+
+    Inputs are deliberately minimal — `paid_ratio` and `carry_qty` are derived,
+    so the model cannot represent contradictory state (e.g., ratio > 1 or
+    carry_qty < 0).
+    """
     item_id: str
-    recorded_qty: Decimal
-    paid_qty_source: Decimal
-    paid_ratio: Decimal
-    carry_qty: Decimal
-    amount: Decimal  # total monetary value of this carry-forward item
+    recorded_qty: Decimal = Field(gt=Decimal("0"))
+    paid_qty_source: Decimal = Field(ge=Decimal("0"))
+    amount: Decimal = Field(ge=Decimal("0"))
     steel_subtype: Literal["angles", "plates", "other_sections", "tmt"] | None = None
+
+    @model_validator(mode="after")
+    def _paid_qty_within_recorded(self) -> "CarryForwardPayload":
+        if self.paid_qty_source > self.recorded_qty:
+            raise ValueError(
+                f"paid_qty_source ({self.paid_qty_source}) cannot exceed "
+                f"recorded_qty ({self.recorded_qty})"
+            )
+        return self
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def paid_ratio(self) -> Decimal:
+        return self.paid_qty_source / self.recorded_qty
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def carry_qty(self) -> Decimal:
+        return self.recorded_qty - self.paid_qty_source
 
 
 class BillPayload(BaseModel):
@@ -41,12 +64,41 @@ class IndexSnapshot(BaseModel):
     series: dict[str, dict[str, Decimal]]  # {series_name: {"YYYY-MM": value}}
 
 
+REQUIRED_GENERAL_WEIGHTS: frozenset[str] = frozenset(
+    {"labour", "plant", "fuel", "materials"}
+)
+
+
 class PVCRuleSet(BaseModel):
-    quarter_mode: Literal["measurement_date", "bill_date"]
-    component_weights: dict[str, Decimal]  # weights for general W components
+    # Only measurement_date is a valid quarter anchor (KU-001). The historical
+    # "bill_date" mode never existed; rejecting it at the schema level
+    # prevents silent miscomputation downstream.
+    quarter_mode: Literal["measurement_date"]
+    component_weights: dict[str, Decimal]
     adjustable_fraction: Decimal           # typically 0.85
     negative_pvc_policy: Literal["allow", "block", "zero_floor"]
     rounding_mode: Literal["round_2", "truncate_2"]
+
+    @field_validator("component_weights")
+    @classmethod
+    def _weights_complete_and_known(cls, v: dict[str, Decimal]) -> dict[str, Decimal]:
+        keys = set(v)
+        missing = REQUIRED_GENERAL_WEIGHTS - keys
+        unknown = keys - REQUIRED_GENERAL_WEIGHTS
+        if missing or unknown:
+            parts = []
+            if missing:
+                parts.append(f"missing keys: {sorted(missing)}")
+            if unknown:
+                parts.append(f"unknown keys: {sorted(unknown)}")
+            raise ValueError(
+                "component_weights must contain exactly "
+                f"{sorted(REQUIRED_GENERAL_WEIGHTS)} ({'; '.join(parts)})"
+            )
+        for k, w in v.items():
+            if w < Decimal("0"):
+                raise ValueError(f"component_weights[{k}] must be >= 0, got {w}")
+        return v
 
 
 class WDerivation(BaseModel):

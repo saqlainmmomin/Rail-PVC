@@ -18,7 +18,13 @@ _SUBTYPE_TO_BUCKET: dict[str, str] = {
 def prorate_carry_forwards(
     carry_forwards: list[CarryForwardPayload],
 ) -> dict[str, Decimal]:
-    """P2-005: prorated steel additions {bucket: amount} for this bill."""
+    """P2-005: prorated steel additions {bucket: amount} for this bill.
+
+    `paid_ratio` is derived from `paid_qty_source / recorded_qty`; a zero paid
+    quantity (and therefore a fully unpaid record) contributes nothing, while a
+    fully paid record contributes the entire amount. Invariants are enforced
+    on CarryForwardPayload itself, so we never see ratio < 0 or > 1 here.
+    """
     additions: dict[str, Decimal] = {
         "steel_angles": Decimal("0"),
         "steel_plates": Decimal("0"),

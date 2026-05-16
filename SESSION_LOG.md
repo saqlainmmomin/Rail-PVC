@@ -187,3 +187,60 @@ The three-agent split described above is now locked in. All future work proceeds
 - `CODEX.md` — boundaries, review format, what never to touch
 - `TASKS.md` — Phase 3 task list, acceptance criteria, domain notes
 - `engine/` source — understand the types and output shape before building P3-009
+
+---
+
+## P2-REVIEW Response — 2026-05-16 (CC-S, evening session)
+
+### What was done
+
+CC-S responded to all CRITICAL/HIGH findings in `REVIEW.md`. P2-06 (MEDIUM) was deferred per the session brief.
+
+| ID | Severity | Status |
+|---|---|---|
+| P2-01 | CRITICAL | ✅ Fixed |
+| P2-02 | HIGH | ✅ Fixed |
+| P2-03 | HIGH | ✅ Fixed (combined with P2-04) |
+| P2-04 | HIGH | ✅ Fixed |
+| P2-05 | HIGH | ✅ Fixed |
+| P2-06 | MEDIUM | Deferred — trace provenance contract |
+
+### Files changed
+
+- `engine/types.py` — type-level invariants. `quarter_mode` narrowed to `Literal["measurement_date"]`; `PVCRuleSet.component_weights` validator requires the exact four general-works keys (`labour`, `plant`, `fuel`, `materials`) with explicit `0` distinguished from missing; `CarryForwardPayload` redesigned to minimal inputs (`recorded_qty`, `paid_qty_source`, `amount`) with `paid_ratio` and `carry_qty` as `@computed_field` properties so the model cannot represent contradictory state.
+- `engine/components.py` — `.get(cat)` → `[cat]` since the schema validator now guarantees completeness.
+- `engine/tests/test_w_derivation.py` — `_cf` helper updated; new `TestCarryForwardInvariants` and `TestPVCRuleSetSchema` test classes covering invariant rejection and required-key enforcement.
+- `engine/tests/test_components.py` — `_rules` helper backfills missing keys with `0`.
+- `engine/tests/test_calculator.py` — `CarryForwardPayload` constructor calls drop removed fields.
+- `engine/tests/test_import.py` — full weight dict in test rule set.
+- `engine/tests/test_real_tender_fixtures.py` — empty fixture directory now **fails** instead of skipping; new assertion that any fixture flagging workbook divergence must populate `notes.workbook_divergence`.
+- `engine/tests/fixtures/real_tenders/bct_2425_252_bill1_q2.json` — new. Q2-FY2025-26, measurement 2025-06-18, cement + steel + excluded NS extra item. Expected `total_pvc = 0.00`, `negative_carry_forward = 635.38`.
+- `engine/tests/fixtures/real_tenders/bct_2425_252_bill2_q4.json` — new. Q4-FY2025-26, measurement 2025-11-04, steel carry-forward. Expected `total_pvc = 77565.84`. Notes explicitly document the physical workbook's Q2→Q4 silent index error and pin the engine's CORRECT Q4 output.
+- `REVIEW.md` — `## CC Response` section added with per-finding write-ups.
+
+### Design decisions (reasoning recorded for future review)
+
+1. **P2-01 — narrow the type, don't add runtime validation.** `quarter_mode` accepting `"bill_date"` as a Literal variant was the schema lying about reality. Removing the variant means Pydantic rejects bad input at deserialization with a clear error, instead of producing plausible-but-wrong numbers downstream. Cleanest representation of an invariant we already know to be true (KU-001).
+
+2. **P2-02 — distinguish "zero" from "missing" at the model layer.** The reviewer flagged that `.get(cat)` silently under-computed PVC. The fix lives at the schema, not at the engine: validator enforces exactly the four required keys, with explicit `0` allowed. The engine then reads with `[cat]` knowing completeness is guaranteed.
+
+3. **P2-03 + P2-04 — make invalid states unrepresentable.** The `CarryForwardPayload` was over-specified — five fields where three sufficed, with no guard against contradiction. Rebuilt around the source-of-truth inputs (`recorded_qty`, `paid_qty_source`, `amount`); `paid_ratio = paid_qty_source / recorded_qty` and `carry_qty = recorded_qty − paid_qty_source` become `@computed_field` properties. By construction, ratio is in `[0, 1]`, carry_qty is non-negative, and `carry_qty=0` now means "fully paid" (which correctly attributes full amount). The P2-04 contradiction (`carry_qty=0` while still deducting) becomes impossible.
+
+4. **P2-05 — pin behaviour with documented intent.** Two fixtures cover Bill-1 (Q2) and Bill-2 (Q4). Bill-2's `notes.workbook_divergence` field is the audit trail for the known Q2→Q4 silent error in the physical workbook — the fixture asserts the engine's CORRECT Q4 result, not the workbook's wrong number. The skip-on-empty behaviour was inverted to fail-on-empty so this regression coverage cannot quietly disappear.
+
+### Verification
+
+- All existing tests still pass.
+- New tests added: `TestCarryForwardInvariants` (7), `TestPVCRuleSetSchema` (4), 2 real-tender fixture tests + parametrized over fixture files.
+- Coverage: **99% on `engine/` package** (≥80% gate cleared). 88 passing, 0 failing.
+
+### What this unblocks
+
+- All P2-REVIEW CRITICAL + HIGH cleared. `shubham/phase-3` merge gate is now open from CC-S's side once P2-06 (MEDIUM, deferred) is either addressed or formally accepted.
+- BCT-24-25-252 regression coverage now exists for both Bill-1 and Bill-2 — closes the P9-002 fixture gap surfaced in REVIEW.md.
+
+### Carrying forward
+
+- **P2-06 (trace provenance contract)** — deferred this session per brief. Decision: either expand trace schema to include `{input_field, formula, index_ref, bill_line_ref}` per field, or downgrade the acceptance claim in `TASKS.md`. Pick one before Phase 7 (results UI) starts; Phase 3 doesn't strictly need richer trace.
+- **RLS migration 009** — still not in git (P1-010-ALEMBIC). Must land before `shubham/phase-3` merges.
+- **TMT bucket confirmation** — still pending Saqlain's domain input. Does not block engine merge, but determines whether `steel_tmt`/`steel_other_sections` split matters for the workbook.

@@ -26,7 +26,12 @@ def test_calculate_pvc_returns_result():
     )
     rules = PVCRuleSet(
         quarter_mode="measurement_date",
-        component_weights={"labour": Decimal("0.20"), "plant": Decimal("0.30")},
+        component_weights={
+            "labour": Decimal("0.20"),
+            "plant": Decimal("0.30"),
+            "fuel": Decimal("0"),
+            "materials": Decimal("0"),
+        },
         adjustable_fraction=Decimal("0.85"),
         negative_pvc_policy="allow",
         rounding_mode="round_2",

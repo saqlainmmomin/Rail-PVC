@@ -2,7 +2,10 @@
 from decimal import Decimal
 from datetime import date
 
-from engine.types import BillPayload, CarryForwardPayload, ExtraItemDecision
+import pytest
+from pydantic import ValidationError
+
+from engine.types import BillPayload, CarryForwardPayload, ExtraItemDecision, PVCRuleSet
 from engine.w_derivation import derive_w, prorate_carry_forwards
 
 
@@ -33,8 +36,8 @@ def _cf(
     item_id: str,
     recorded_qty: str,
     paid_qty: str,
-    paid_ratio: str,
-    carry_qty: str,
+    paid_ratio: str,  # informational only — derived from quantities
+    carry_qty: str,   # informational only — derived from quantities
     amount: str,
     subtype: str | None = None,
 ) -> CarryForwardPayload:
@@ -42,8 +45,6 @@ def _cf(
         item_id=item_id,
         recorded_qty=Decimal(recorded_qty),
         paid_qty_source=Decimal(paid_qty),
-        paid_ratio=Decimal(paid_ratio),
-        carry_qty=Decimal(carry_qty),
         amount=Decimal(amount),
         steel_subtype=subtype,
     )
@@ -191,10 +192,11 @@ class TestExtraItemExclusion:
 
 class TestCarryForwardProration:
     def test_bct_2425_252_item_10_2_ratio(self):
-        """BCT-24-25-252 sample: recorded 6172.57, paid 5600, ratio 0.9072."""
+        """BCT-24-25-252 sample: recorded 6172.57, paid 5600 → derived ratio."""
         cf = _cf("10.2", "6172.57", "5600", "0.9072", "572.57", "100000", subtype="angles")
         additions = prorate_carry_forwards([cf])
-        assert additions["steel_angles"] == Decimal("100000") * Decimal("0.9072")
+        expected_ratio = Decimal("5600") / Decimal("6172.57")
+        assert additions["steel_angles"] == Decimal("100000") * expected_ratio
         assert additions["steel_plates"] == Decimal("0")
         assert additions["steel_other"] == Decimal("0")
 
@@ -222,7 +224,8 @@ class TestCarryForwardProration:
         bill = _bill(on_account="1000000", angles="50000", carry_forwards=[cf])
         d, errs = derive_w(bill)
         assert errs == []
-        expected_angles = Decimal("50000") + Decimal("100000") * Decimal("0.9072")
+        expected_ratio = Decimal("5600") / Decimal("6172.57")
+        expected_angles = Decimal("50000") + Decimal("100000") * expected_ratio
         assert d.steel_angles == expected_angles
         assert d.w == Decimal("1000000") - expected_angles
 
@@ -253,3 +256,146 @@ class TestCarryForwardProration:
             + d.steel_other + d.technical_withheld + d.extra_items
         )
         assert total == Decimal("8903877.99")
+
+
+# ---------------------------------------------------------------------------
+# P2-03 / P2-04: CarryForwardPayload invariants (now enforced by the model)
+# ---------------------------------------------------------------------------
+
+class TestCarryForwardInvariants:
+    def test_paid_qty_exceeding_recorded_is_rejected(self):
+        with pytest.raises(ValidationError):
+            CarryForwardPayload(
+                item_id="X",
+                recorded_qty=Decimal("100"),
+                paid_qty_source=Decimal("120"),
+                amount=Decimal("1000"),
+                steel_subtype="angles",
+            )
+
+    def test_negative_paid_qty_is_rejected(self):
+        with pytest.raises(ValidationError):
+            CarryForwardPayload(
+                item_id="X",
+                recorded_qty=Decimal("100"),
+                paid_qty_source=Decimal("-1"),
+                amount=Decimal("1000"),
+                steel_subtype="angles",
+            )
+
+    def test_zero_recorded_qty_is_rejected(self):
+        with pytest.raises(ValidationError):
+            CarryForwardPayload(
+                item_id="X",
+                recorded_qty=Decimal("0"),
+                paid_qty_source=Decimal("0"),
+                amount=Decimal("1000"),
+                steel_subtype="angles",
+            )
+
+    def test_negative_amount_is_rejected(self):
+        with pytest.raises(ValidationError):
+            CarryForwardPayload(
+                item_id="X",
+                recorded_qty=Decimal("100"),
+                paid_qty_source=Decimal("50"),
+                amount=Decimal("-1"),
+                steel_subtype="angles",
+            )
+
+    def test_paid_ratio_is_derived(self):
+        cf = CarryForwardPayload(
+            item_id="X",
+            recorded_qty=Decimal("100"),
+            paid_qty_source=Decimal("80"),
+            amount=Decimal("1000"),
+            steel_subtype="angles",
+        )
+        assert cf.paid_ratio == Decimal("0.8")
+        assert cf.carry_qty == Decimal("20")
+
+    def test_fully_paid_carry_attributes_full_amount(self):
+        cf = CarryForwardPayload(
+            item_id="X",
+            recorded_qty=Decimal("100"),
+            paid_qty_source=Decimal("100"),
+            amount=Decimal("5000"),
+            steel_subtype="angles",
+        )
+        additions = prorate_carry_forwards([cf])
+        assert additions["steel_angles"] == Decimal("5000")
+        assert cf.carry_qty == Decimal("0")
+
+    def test_zero_paid_carry_contributes_nothing(self):
+        cf = CarryForwardPayload(
+            item_id="X",
+            recorded_qty=Decimal("100"),
+            paid_qty_source=Decimal("0"),
+            amount=Decimal("5000"),
+            steel_subtype="angles",
+        )
+        additions = prorate_carry_forwards([cf])
+        assert additions["steel_angles"] == Decimal("0")
+
+
+# ---------------------------------------------------------------------------
+# P2-01 / P2-02: PVCRuleSet schema invariants
+# ---------------------------------------------------------------------------
+
+def _full_weights() -> dict[str, Decimal]:
+    return {
+        "labour":    Decimal("0.20"),
+        "plant":     Decimal("0.30"),
+        "fuel":      Decimal("0.15"),
+        "materials": Decimal("0.20"),
+    }
+
+
+class TestPVCRuleSetSchema:
+    def test_bill_date_quarter_mode_rejected(self):
+        with pytest.raises(ValidationError):
+            PVCRuleSet(
+                quarter_mode="bill_date",  # type: ignore[arg-type]
+                component_weights=_full_weights(),
+                adjustable_fraction=Decimal("0.85"),
+                negative_pvc_policy="zero_floor",
+                rounding_mode="round_2",
+            )
+
+    def test_missing_component_weight_rejected(self):
+        weights = _full_weights()
+        del weights["plant"]
+        with pytest.raises(ValidationError) as exc_info:
+            PVCRuleSet(
+                quarter_mode="measurement_date",
+                component_weights=weights,
+                adjustable_fraction=Decimal("0.85"),
+                negative_pvc_policy="zero_floor",
+                rounding_mode="round_2",
+            )
+        assert "plant" in str(exc_info.value)
+
+    def test_unknown_component_weight_rejected(self):
+        weights = _full_weights()
+        weights["bogus"] = Decimal("0.10")
+        with pytest.raises(ValidationError) as exc_info:
+            PVCRuleSet(
+                quarter_mode="measurement_date",
+                component_weights=weights,
+                adjustable_fraction=Decimal("0.85"),
+                negative_pvc_policy="zero_floor",
+                rounding_mode="round_2",
+            )
+        assert "bogus" in str(exc_info.value)
+
+    def test_explicit_zero_weight_is_allowed(self):
+        weights = _full_weights()
+        weights["fuel"] = Decimal("0")
+        rules = PVCRuleSet(
+            quarter_mode="measurement_date",
+            component_weights=weights,
+            adjustable_fraction=Decimal("0.85"),
+            negative_pvc_policy="zero_floor",
+            rounding_mode="round_2",
+        )
+        assert rules.component_weights["fuel"] == Decimal("0")
