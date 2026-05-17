@@ -6,26 +6,25 @@ This file is the shortest path to current branch state, blockers, and next actio
 
 ## Current Phase
 
-- Active workstream: Phase 3 remediation closure + Phase 4 scaffolding
-- Review state: Phase 3 remediation landed; awaiting re-review
-- Current branch in repo: `saqlain/phase-3-remediation`
+- Active workstream: Phase 3 backfill endpoints (CC-SH) + Phase 4 frontend integration (CC-S)
+- Review state: Phase 3 remediation merged to `main` via PR #3 (2026-05-17)
+- Current branch in repo: `main` is the active head — no active feature branch
 
 ## Current Blockers
 
-- None merge-blocking. Phase 3 remediation has resolved `P3-01…P3-08`. Awaiting Codex-S re-review against the new branch.
-- `P3-09` (MEDIUM) was fixed in the same cycle.
+- None.
+- Out-of-band action still required: rotate the previously-exposed Supabase project keys + Postgres password. Regex test in `backend/tests/test_p3_01_env_example.py` blocks re-introduction in code.
 
 ## Active Review Cycle
 
-- Active review file: [REVIEW.md](REVIEW.md)
-- Cycle: Phase 3 remediation — all findings carry `CC Response` resolution notes
-- Next action: Codex-S re-review of `saqlain/phase-3-remediation` against `main`
+- No active cycle. P3-01…P3-09 closed; PR #3 merged.
+- Next checkpoint: review of Phase 3 backfill endpoints (schedules / contract_items / recoveries / documents) when CC-SH opens that PR.
 
 ## Branch State
 
-- Active branch: `saqlain/phase-3-remediation` (branched off `main`)
-- Quarantined: `shubham/phase-3` — deleted; do not restore
-- Parked: `saqlain/phase-4` — Phase 4 scaffolding, will rebase on top once P3 lands
+- `main` is the active head
+- Deleted: `saqlain/phase-3-remediation` (merged via PR #3), `saqlain/phase-4` (superseded by remediation), `shubham/phase-3` (quarantined)
+- Next feature branches: `shubham/phase-3-backfill` (CC-SH) and `saqlain/phase-4-integration` (CC-S, frontend `apiFetch` for typed error contract + auth wiring) — branch from `main`
 
 ## What To Read
 
@@ -48,9 +47,9 @@ This file is the shortest path to current branch state, blockers, and next actio
 
 ## Current Priorities
 
-1. Codex-S re-reviews `saqlain/phase-3-remediation` against `main` per the P3-REVIEW checklist
-2. CC-S rebases `saqlain/phase-4` on top after merge
-3. Backfill the remaining Phase 3 endpoints not covered by the remediation pass (schedules, recoveries, documents) only as Phase 4/5 UI needs them
+1. [CC-SH] Phase 3 backfill endpoints — schedules, contract_items, recoveries, documents — branch off `main`. Patterns and boundaries documented in PR #3 description.
+2. [CC-S] Frontend `apiFetch` switches on `detail.code` for the typed error contract (P4-007); wire Supabase auth client (P4-001) and contract list (P4-004) once backend is live in a deployed env.
+3. Rotate exposed Supabase credentials (out-of-band).
 
 ## File Classification
 

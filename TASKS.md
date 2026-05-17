@@ -32,33 +32,34 @@ Start with [STATUS.md](STATUS.md) for current blockers and branch state.
 - P2 review/fix cycle: complete
 - P3 pre-review hardening: complete
 - P3 initial implementation branch: quarantined after review failure
-- **P3 remediation (P3-R1…P3-R10): complete on `saqlain/phase-3-remediation` (2026-05-17)**
+- **P3 remediation (P3-01…P3-09): merged to `main` via PR #3 (2026-05-17)**
 
 ## Current Workstreams
 
-### Phase 3 — Re-review
+### Phase 3 — Backfill endpoints
 
-Status: code + tests landed; awaiting Codex-S re-review against the [P3-REVIEW checklist](archive/REVIEW_ARCHIVE.md)
+Status: open. Patterns + boundaries documented in PR #3 description; copy from existing routers.
 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
-| P3-RE-REVIEW | Run adversarial review against `saqlain/phase-3-remediation` | [CODEX-S] | pending | Use the prewritten P3-REVIEW checklist; verify `P3-01…P3-09` resolutions hold under the live API |
-| P3-RE-MERGE | Merge `saqlain/phase-3-remediation` → `main` | [CC-S] | blocked | Blocked on `P3-RE-REVIEW` clearance |
-| P3-RE-BACKFILL | Add schedules, contract_items, recoveries, documents endpoints | [CC-SH] | pending | Not blocking — add as Phase 5/6 UI needs them |
+| P3-BF-1 | `POST/GET /api/contracts/{id}/schedules` | [CC-SH] | pending | Pattern: `api/contracts.py` tenant check; `schedule_type` enum from migration 002 |
+| P3-BF-2 | `POST/GET /api/schedules/{id}/items` (contract_items) | [CC-SH] | pending | Use `assert_*_belongs_to_*` parent-child pattern; `steel_subtype` enum |
+| P3-BF-3 | `POST /api/bills/{id}/recoveries` | [CC-SH] | pending | Pattern: `api/bills.py::create_bill_line`; `recovery_type` enum |
+| P3-BF-4 | `POST/GET /api/contracts/{id}/documents` | [CC-SH] | pending | Supabase Storage upload; 50MB max; no parsing in v1 |
 
 ### Phase 4 — Frontend Shell + Navigation
 
-Status: scaffold complete; live integration unblocks after P3 re-review clears
+Status: scaffold complete (on main); live integration unblocked
 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
-| P4-001 | Supabase auth client wiring | [CC-S] | pending | Unblocks after P3 merge |
+| P4-001 | Supabase auth client wiring | [CC-S] | pending | Backend auth surface now on main |
 | P4-002 | Auth pages: login, signup | [CC-SH] | pending | UI task after P4-001 |
 | P4-003 | App shell | [CC-S] | complete | Scaffold landed |
-| P4-004 | Contract list dashboard | [CC-S] | pending | Unblocks after P3 merge; `GET /api/contracts` contract is stable |
-| P4-005 | Error boundaries/global handling | [CC-S] | complete | Backend now ships matching error contract (P3-09); frontend `apiFetch` needs to switch on `detail.code` |
-| P4-006 | TanStack Query + typed API integration | [CC-S] | in_progress | Generate types from `/openapi.json` once backend is live |
-| P4-007 | Update `frontend/lib/api/client.ts` to surface structured `detail.code` | [CC-S] | pending | Pairs with P3-09 backend contract |
+| P4-004 | Contract list dashboard | [CC-S] | pending | `GET /api/contracts` contract is stable |
+| P4-005 | Error boundaries/global handling | [CC-S] | complete | Backend error contract on main (P3-09); pairs with P4-007 |
+| P4-006 | TanStack Query + typed API integration | [CC-S] | in_progress | Generate types from `/openapi.json` once backend deployed |
+| P4-007 | `frontend/lib/api/client.ts` switches on `detail.code` | [CC-S] | pending | Surface `validation_errors`/`run_id` from typed `ApiProblem` payloads |
 
 ### Phases 5–9 — Forward Plan
 
@@ -72,6 +73,6 @@ Remain planned. Do not advance if they depend on unresolved Phase 3 review findi
 
 ## Next Review Checkpoints
 
-- `P3-RE-REVIEW` — Codex-S re-review of the remediation branch
+- `P3-BF-REVIEW` — Codex-S review of CC-SH's Phase 3 backfill PR (when opened)
 - `P8-REVIEW` — export format parity review
 - `P9-DEBUG` — second-pass debugging and edge-case hunt

@@ -13,11 +13,19 @@ Use it for current milestone decisions and recent sessions only.
 
 ## Current Project State
 
-- Phase 0, 1, and 2 are complete
-- Phase 3 remediation complete on `saqlain/phase-3-remediation`; awaiting Codex-S re-review
-- Phase 4 scaffolding parked on `saqlain/phase-4`; will rebase after P3 merge
+- Phase 0, 1, 2 complete; Phase 3 remediation **merged to `main`** via PR #3 (2026-05-17)
+- Phase 4 scaffolding already on `main` (merged earlier via PR #1)
+- No active feature branch. `saqlain/phase-3-remediation` and `saqlain/phase-4` deleted (local + origin) after merge / supersession.
+- Out-of-band: Supabase project keys + Postgres password still need rotation outside the repo.
 
 ## Recent Sessions
+
+### Session 11 — 2026-05-17 (Phase 3 remediation merged + branch cleanup)
+
+- PR #3 merged to `main` (merge commit `07838f4`)
+- Deleted `saqlain/phase-3-remediation` (local + origin) and `saqlain/phase-4` (local + origin) — superseded
+- Slimmed `REVIEW.md` to closure-pointer state per the active-state-files rule
+- `STATUS.md` / `TASKS.md` updated: no active cycle; next workstream is Phase 3 backfill (CC-SH) + Phase 4 integration (CC-S)
 
 ### Session 10 — 2026-05-17 (Phase 3 remediation, branch `saqlain/phase-3-remediation`)
 
@@ -65,6 +73,6 @@ Out-of-band action required:
 
 ## Next Actions
 
-1. Codex-S runs `P3-RE-REVIEW` against `saqlain/phase-3-remediation`
-2. CC-S addresses any new findings; merge to `main` once clean
-3. Rebase `saqlain/phase-4` on top of merged `main` and resume P4-001 / P4-004 / P4-007
+1. [CC-SH] Branch off `main` for Phase 3 backfill endpoints (schedules / contract_items / recoveries / documents). Patterns documented in PR #3 description.
+2. [CC-S] Frontend `apiFetch` consumes typed `detail.code` (P4-007); wire P4-001 / P4-004.
+3. Rotate exposed Supabase credentials out-of-band.
