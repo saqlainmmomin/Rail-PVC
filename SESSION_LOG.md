@@ -581,3 +581,38 @@ Pull upstream Phase 4 changes, then implement Phase 3 API layer (P3-001 through 
 - Integration test against live Supabase: `curl http://localhost:8000/health`
 - BCT-24-25-252 domain-correctness regression (REVIEW.md regression set)
 - P3-REVIEW by CODEX-S once all endpoints confirm healthy against live DB
+
+---
+
+## Session 7 — 2026-05-17 [CC-SH] (Environment verification + Obsidian sync)
+
+### Context
+
+Continuation of Session 6 same day. Phase 3 was coded but the live environment was not yet verified. This session cleared all remaining blockers and confirmed the server running.
+
+### What happened
+
+**Environment setup:**
+- `backend/.env` created from `.env.example`; fixed `SUPABASE_URL` in `.env.example` from dashboard URL (`https://supabase.com/dashboard/...`) to API URL (`https://ivselmhloegjmqrjekcy.supabase.co`)
+- `uv` installed to `C:\Users\Welcome\.local\bin\uv.exe`
+- `uv sync` ran from `backend/` — venv created at `backend/.venv` (Python 3.11.15, 67 packages)
+- **hatchling editable install bug (Windows):** `uv sync` installed `railpvc_engine-0.1.0.dist-info` but did not create a `.pth` file, so `import engine` failed. Fix: manually created `backend/.venv/Lib/site-packages/railpvc-engine.pth` with one line: `C:\Users\Welcome\OneDrive\Desktop\ClaudeCode\Rail-PVC_Shubham`. Confirmed with `uv run python -c "import engine; print(engine.__file__)"`.
+- **Alembic stamp fix:** `alembic upgrade head` failed — Supabase DB already had migrations 009–011 applied directly but Alembic's version table said `008`. Fix: `alembic stamp 011`, then `alembic upgrade head` applied only migration 012 successfully.
+- **Server confirmed:** `uv run uvicorn main:app --port 8000` — all 22 routes registered; `/health` returns `{"status":"ok","service":"railpvc-api"}`.
+
+**Obsidian vault updated:**
+- `04-logs/sessions/2026-05-17.md` — session diary entry
+- `01-projects/RailPVC - Next Step.md` — replaced pre-P3-001 blockers with post-Phase-3 next actions (integration test → P3-REVIEW → merge)
+- `01-projects/RailPVC-Tasks.md` — exhaustive multi-phase task list (P0–P9 + Infrastructure)
+- `00-meta/top-of-mind.md` — blockers cleared; next actions updated
+
+**Memory updated:**
+- `project_railpvc.md` — Phase 3 marked coded+verified; dev environment recorded
+
+### Next actions
+
+- [ ] BCT-24-25-252 domain-correctness regression against live API (`REVIEW.md` regression set)
+- [ ] CODEX-S P3-REVIEW — submit `shubham/phase-3` for adversarial review
+- [ ] Merge `shubham/phase-3` → main once P3-REVIEW clears all CRITICAL/HIGH findings
+- [ ] Phase 4 P4-001 (CC-S) unblocks once P3-001 merges; P4-002 (CC-SH) follows
+- [ ] Set up GitHub fork + `origin` remote for future pushes (currently none configured)

@@ -72,11 +72,11 @@
 
 ---
 
-## Phase 3 — API Layer 🔄 [CC-SH] — CODED 2026-05-17, pending live env test
+## Phase 3 — API Layer ✓ [CC-SH] — CODED + ENV VERIFIED 2026-05-17, pending integration test + P3-REVIEW
 
 > **Branch:** `shubham/phase-3` — do not merge to main until P2-REVIEW CRITICAL/HIGH issues are resolved and CC-S signs off.
 > **Shubham's Claude:** read `ARCHITECTURE.md`, `CODEX.md`, and the Phase 2 engine code before starting. Never touch `engine/`, migrations, or auth logic beyond what P3-001 requires.
-> **Status (2026-05-17):** All P3-001→P3-011 implemented in commit 5eb831a. Blocked on `backend/.env` (user must create) + `uv sync` + `alembic upgrade head` before integration testing.
+> **Status (2026-05-17):** All P3-001→P3-011 implemented (commit 5eb831a). Env verified: `backend/.env` created, uv venv active (Python 3.11.15), all 12 migrations applied (stamped 011, applied 012). Server confirmed on port 8000 — 22 routes registered. Pending: BCT-24-25-252 integration test + CODEX-S P3-REVIEW.
 
 | ID | Title | Owner | Deps | Acceptance Criteria | Domain Notes |
 |---|---|---|---|---|---|
