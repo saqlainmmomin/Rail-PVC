@@ -512,3 +512,72 @@ Captured retrospectively in `tasks/track-b-design-decisions.md` (the original br
 ### Notes for the next CC-S window
 
 Hardware rails still apply: 8 GB box + Electron AI IDE + `next dev` = deadlock. Prefer `next build && next start` for any future SSR / route verification. Don't probe routes back-to-back. See `tasks/lessons.md` (2026-05-16 entry) before opening a parallel session.
+
+---
+
+## Session 6 — 2026-05-17 [CC-SH]
+
+### Goal
+Pull upstream Phase 4 changes, then implement Phase 3 API layer (P3-001 through P3-011).
+
+### What happened
+
+**Sync: fast-forward `shubham/phase-3` to upstream/main** — 3 new commits (bccd37e, 97f5122, 39f4f21) pulled in:
+- P2-11 TraceContract engine implementation (99 tests, 99% coverage)
+- Phase 4 Track B app shell (AppShell, Sidebar, CommandPalette, Header, ShellState)
+- Frontend primitives: Button, Badge, EmptyState; routes: /contracts, /indices, /documents
+- REVIEW.md: P2-06 full CC-S response + P3-REVIEW checklist (HIGH/CRITICAL items)
+- TASKS.md: P2-06 + P2-011 marked closed; merge gate cleared
+
+**Phase 3 implemented** — complete FastAPI API layer in one commit (5eb831a):
+
+`backend/models/db.py` — SQLAlchemy 2.0 async engine + session factory from DATABASE_URL
+
+`backend/api/deps.py` — **P3-001**: Supabase JWT verification via `/auth/v1/user`, tenant_id extracted from `users` table, injected as FastAPI dependency
+
+`backend/api/contracts.py` — **P3-002**: POST/GET/PUT /api/contracts; railway_zone required and validated against 16-value ENUM; base_month normalized to first-of-month
+
+`backend/api/schedules.py` — **P3-003**: Schedules + ContractItems CRUD; steel_subtype validated
+
+`backend/api/bills.py` — **P3-004**: running_bills + bill_lines (upsert on conflict) + recoveries
+
+`backend/api/carry_forwards.py` — **P3-005**: GET carry-forwards; PUT paid_qty only — paid_ratio always server-derived from `paid_qty_source / recorded_qty`
+
+`backend/api/indices.py` — **P3-006**: GET index-series; GET/POST/PUT index-observations; duplicate (series_id, month) returns 409
+
+`backend/api/extra_items.py` — **P3-007**: ExtraItemDecision CRUD; eligible=NULL valid (undecided); returns item_code + description for UI highlighting
+
+`backend/api/pvc_rules.py` — **P3-008**: PVCRuleSet GET/PUT; component_weights validation mirrors engine._weights_complete_and_known exactly
+
+`backend/api/pvc_runs.py` + `backend/services/pvc_service.py` — **P3-009/P3-010**:
+  - `build_bill_payload()`: classifies bill_lines by subtype; joins carry_forwards to source bill_lines for amount + source_ref (REVIEW HIGH-7)
+  - `build_index_snapshot()`: ZONE_TO_CITY mapping; tries city-specific series, falls back to generic (REVIEW HIGH-13)
+  - `persist_run_result()`: inserts pvc_runs (with trace JSONB), pvc_components, revision_snapshot; total_pvc/w/quarter_used stored in bill_snapshot
+  - CRITICAL-4: validation_errors → 422, no row inserted
+  - HIGH-9: idempotency_key prevents duplicate Draft runs
+  - Approve endpoint: 409 if already Approved; DB trigger is the immutability backstop
+
+`backend/api/documents.py` — **P3-011**: multipart upload → Supabase Storage REST API; 50MB limit; path = `{tenant_id}/{contract_id}/{filename}`
+
+`backend/migrations/versions/012_trace_column.py` — adds `trace JSONB` to `pvc_runs` (required for P3-009 trace persistence; non-breaking ALTER TABLE)
+
+`backend/api/schemas.py` — `JsonDecimal = Annotated[Decimal, PlainSerializer(str)]` prevents float coercion (REVIEW HIGH-10)
+
+**pyproject.toml**: added `httpx>=0.27`, `python-multipart>=0.0.9`
+**main.py**: all 9 routers registered
+
+### Blockers remaining
+
+1. `backend/.env` still missing — USER ACTION REQUIRED:
+   - Copy `backend/.env.example` → `backend/.env`
+   - Fill in SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY
+   - Add DATABASE_URL (postgresql+asyncpg://... format)
+2. Python venv not set up — run `uv sync` from `backend/` (uv must be installed first)
+3. Migrations not applied — run `alembic upgrade head` after venv + .env ready
+
+### Next actions
+
+- User: fill `.env`, install uv, run `uv sync && alembic upgrade head`
+- Integration test against live Supabase: `curl http://localhost:8000/health`
+- BCT-24-25-252 domain-correctness regression (REVIEW.md regression set)
+- P3-REVIEW by CODEX-S once all endpoints confirm healthy against live DB

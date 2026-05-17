@@ -72,10 +72,11 @@
 
 ---
 
-## Phase 3 — API Layer 🔄 [CC-SH]
+## Phase 3 — API Layer 🔄 [CC-SH] — CODED 2026-05-17, pending live env test
 
 > **Branch:** `shubham/phase-3` — do not merge to main until P2-REVIEW CRITICAL/HIGH issues are resolved and CC-S signs off.
 > **Shubham's Claude:** read `ARCHITECTURE.md`, `CODEX.md`, and the Phase 2 engine code before starting. Never touch `engine/`, migrations, or auth logic beyond what P3-001 requires.
+> **Status (2026-05-17):** All P3-001→P3-011 implemented in commit 5eb831a. Blocked on `backend/.env` (user must create) + `uv sync` + `alembic upgrade head` before integration testing.
 
 | ID | Title | Owner | Deps | Acceptance Criteria | Domain Notes |
 |---|---|---|---|---|---|
