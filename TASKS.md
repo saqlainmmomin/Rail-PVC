@@ -36,6 +36,7 @@ Start with [STATUS.md](STATUS.md) for current blockers and branch state.
 - **Phase 4 frontend (P4-001…P4-007): all complete on `main` (2026-05-17)**
 - **Phase 3 backfill (P3-BF-1…P3-BF-4): merged to `main` via PR #4 (2026-05-18)**
 - **TEST-P3P4 (TEST-01…TEST-07): merged to `main` (2026-05-19) — M-1/M-2 closed, 55/55 backend tests, 99/99 engine tests**
+- **Phase 5 UI implementation (P5-001…P5-008): complete on `saqlain/phase-5` (2026-05-19) — 61/61 backend tests, `next build` clean. Awaiting commit + P5-REVIEW.**
 
 ## Current Workstreams
 
@@ -80,15 +81,18 @@ Status: scaffold complete (on main); live integration unblocked
 
 ### Phase 5 UI — Contract Setup `[CC-S]`
 
-Status: **in progress** — design review as of 2026-05-19. Branch: `saqlain/phase-5`.
+Status: **implementation complete (2026-05-19)** — branch `saqlain/phase-5`, uncommitted at time of writing. 61/61 backend tests + `next build` clean. Awaiting commit/push + manual smoke + `P5-REVIEW`.
 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
-| B-1 | Contract creation form (`/contracts/new`) | [CC-S] | pending | `POST /api/contracts`; full field validation |
-| B-2 | Contract detail page (`/contracts/[id]`) | [CC-S] | pending | TanStack Query; tab scaffold for schedules/bills |
-| B-3 | Contract edit (inline or modal) | [CC-S] | pending | `PUT /api/contracts/{id}`; reuse B-1 form |
-| B-4 | Schedule management on detail | [CC-S] | pending | Dep: B-2 + A-1 (merged) |
-| B-5 | Contract items grid (AG Grid) | [CC-S] | pending | Dep: B-4 + A-2 (merged); **Save All button** (OQ-2 decided 2026-05-19) |
+| P5-001 | Backend: `PUT /api/contracts/{id}` + expanded GET | [CC-S] | complete | `ContractUpdate` partial via `model_fields_set`; 5 new tests; route count 28→29 |
+| P5-002 | Frontend deps + shared constants (`zones.ts`, `contracts-schema.ts`) | [CC-S] | complete | `react-hook-form` 7.76.0, `@hookform/resolvers` 5.2.2, `zod` 4.4.3, `ag-grid-community` + `ag-grid-react` 35.3.0 |
+| P5-003 / B-1 | `/contracts/new` creation form | [CC-S] | complete | `ContractForm` + `ZoneSelect`; `base_month` auto-appends `-01`; 409 → inline error |
+| P5-004 / B-2 | `/contracts/[id]` detail + tab shell | [CC-S] | complete | TanStack Query; `?tab=` URL state; ExtraNS link auto-shows when schedule exists |
+| P5-005 / B-3 | Overview tab inline edit | [CC-S] | complete | Calls PUT; cancel discards; 409 inline; query invalidation on save |
+| P5-006 / B-4 | Schedules tab + `ScheduleForm` | [CC-S] | complete | DSR/NS/ExtraNS select; `bid_discount_pct` as fraction; deferred fetch via `enabled` |
+| P5-007 / B-5 | Items tab — `ItemsGrid` (AG Grid) | [CC-S] | complete | Community module registration; cement+steel mutual-exclusion warning; **Save All** with sequential POST + progress |
+| P5-008 | `/contracts/[id]/extra-items` page | [CC-S] | complete | Optimistic Yes/No/Undecided toggles; banner switches on undecided count |
 
 ### SH-P5 — GET Bill Endpoints + Export Backend `[CC-SH]`
 

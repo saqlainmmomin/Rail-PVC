@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { FileText, PlusCircle } from "lucide-react";
 import { apiFetch } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
@@ -42,10 +43,12 @@ export default function ContractsPage() {
             Set up a contract once, then bill against it as MBs come in.
           </p>
         </div>
-        <Button variant="primary" disabled title="POST /api/contracts — coming in Phase 5">
-          <PlusCircle className="h-3.5 w-3.5" strokeWidth={1.75} />
-          New contract
-        </Button>
+        <Link href="/contracts/new">
+          <Button variant="primary">
+            <PlusCircle className="h-3.5 w-3.5" strokeWidth={1.75} />
+            New contract
+          </Button>
+        </Link>
       </header>
 
       {isLoading && (
@@ -64,9 +67,9 @@ export default function ContractsPage() {
           title="No contracts yet"
           description="Start with an LOA / tender number. You can upload the agreement after."
           action={
-            <Button variant="primary" disabled>
-              Add your first contract
-            </Button>
+            <Link href="/contracts/new">
+              <Button variant="primary">Add your first contract</Button>
+            </Link>
           }
         />
       )}
@@ -101,9 +104,9 @@ export default function ContractsPage() {
                 <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
               </div>
               <div className="flex justify-end">
-                <Button variant="ghost" size="sm" disabled title="Contract detail — Phase 5">
-                  View
-                </Button>
+                <Link href={`/contracts/${c.id}`}>
+                  <Button variant="ghost" size="sm">View</Button>
+                </Link>
               </div>
             </div>
           ))}
