@@ -13,11 +13,13 @@ Use this file for the current live review state only.
 
 No active cycle.
 
-The previous cycle (Phase 3 remediation, `P3-01…P3-09`) closed when PR #3 merged to `main` on 2026-05-17. All findings carried `CC Response` resolution notes and pinning tests; the full record is preserved in git history at commit `739bc4f` and the merge commit `07838f4`.
+Last closed: TEST-P3P4 — M-1 (missing recovery_type test) and M-2 (untyped 500 on storage error) both closed via TEST-01/TEST-02. Full record in git history at commits `48d4769` / `0d8539a`. PR #4 (Phase 3 backfill) reviewed by CC-S; no CRITICAL/HIGH.
 
 ## Next Expected Checkpoint
 
-`P3-BF-REVIEW` — Codex-S adversarial review of the Phase 3 backfill PR (`[CC-SH]`: schedules, contract_items, recoveries, documents endpoints) once CC-SH opens it. Until then this file stays empty.
+`P5-REVIEW` — Codex-S adversarial pass after Phase 5 UI (B-1…B-5, branch `saqlain/phase-5`) lands. Until then this file stays empty.
+
+`SH-P5-REVIEW` — CC-S review of Shubham's GET bill endpoints + export routes (`shubham/phase-5-backend`) before merge.
 
 ## Resolution Protocol
 

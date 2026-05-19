@@ -479,6 +479,6 @@ After all tracks:
 | # | Question | Who decides | Urgency |
 |---|---|---|---|
 | OQ-1 | Backend test suite: proper ES256 mock vs. TEST_MODE bypass? | Saqlain | **Closed** — TEST-04 confirmed all tests use dep overrides, no token minting needed |
-| OQ-2 | B-5 items grid: save on cell-edit (per row) or explicit "Save all" button? | Saqlain | Medium — before B-5 starts |
+| OQ-2 | B-5 items grid: save on cell-edit (per row) or explicit "Save all" button? | Saqlain | **Closed 2026-05-19 — Save All button.** Rationale: BOQ is one-time bulk import; per-row save has no atomicity and creates silent partial imports on failure. Validate whole sheet client-side, then POST rows sequentially with progress indicator. |
 | OQ-3 | D-2 extra-item UI: inline on contract detail or separate page? | Saqlain | Low — before D-2 starts |
 | OQ-4 | Credential hygiene: new DB password + JWT secret in `.env` only — is onboarding doc needed for Shubham? | Saqlain | Medium |

@@ -88,7 +88,7 @@ Status: **in progress** — design review as of 2026-05-19. Branch: `saqlain/pha
 | B-2 | Contract detail page (`/contracts/[id]`) | [CC-S] | pending | TanStack Query; tab scaffold for schedules/bills |
 | B-3 | Contract edit (inline or modal) | [CC-S] | pending | `PUT /api/contracts/{id}`; reuse B-1 form |
 | B-4 | Schedule management on detail | [CC-S] | pending | Dep: B-2 + A-1 (merged) |
-| B-5 | Contract items grid (AG Grid) | [CC-S] | pending | Dep: B-4 + A-2 (merged); OQ-2 open |
+| B-5 | Contract items grid (AG Grid) | [CC-S] | pending | Dep: B-4 + A-2 (merged); **Save All button** (OQ-2 decided 2026-05-19) |
 
 ### SH-P5 — GET Bill Endpoints + Export Backend `[CC-SH]`
 
