@@ -13,6 +13,12 @@ import {
 } from "ag-grid-community";
 import { Button } from "@/components/ui/Button";
 import { apiFetch, ApiError } from "@/lib/api/client";
+import {
+  parseTsvImport,
+  VALID_STEEL_SUBTYPES,
+  type ParseResult,
+  type SteelSubtype,
+} from "@/lib/parseTsvImport";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -21,8 +27,6 @@ const gridTheme = themeQuartz.withParams({
   headerHeight: 36,
   rowHeight: 34,
 });
-
-type SteelSubtype = "angles" | "plates" | "other_sections" | "tmt" | null;
 
 interface ContractItem {
   id?: string;
@@ -95,62 +99,6 @@ function TooltipHeader(
   );
 }
 
-// P5-F2 — parse a TSV blob pasted from Excel into RowState[]. Column order
-// is fixed and documented in the modal itself.
-type ParseResult = {
-  rows: RowState[];
-  errors: string[];
-};
-
-function parseTsvImport(raw: string): ParseResult {
-  const out: RowState[] = [];
-  const errors: string[] = [];
-  const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  lines.forEach((line, idx) => {
-    const cols = line.split("\t");
-    if (cols.length < 8) {
-      errors.push(
-        `Row ${idx + 1}: expected 8–9 columns, got ${cols.length}`,
-      );
-      return;
-    }
-    const [
-      item_code,
-      description,
-      unit,
-      original_qty,
-      revised_qty,
-      base_rate,
-      agreement_rate,
-      is_cement_item,
-      steel_subtype,
-    ] = cols;
-    const num = (s: string): number | null => {
-      const t = (s ?? "").trim();
-      if (t === "") return null;
-      const n = Number(t);
-      return Number.isNaN(n) ? null : n;
-    };
-    const cement = ["true", "1", "yes"].includes(
-      (is_cement_item ?? "").trim().toLowerCase(),
-    );
-    const subtype = (steel_subtype ?? "").trim();
-    out.push({
-      item_code: item_code.trim(),
-      description: description.trim(),
-      unit: unit.trim(),
-      original_qty: num(original_qty),
-      revised_qty: num(revised_qty),
-      base_rate: num(base_rate),
-      agreement_rate: num(agreement_rate),
-      is_cement_item: cement,
-      steel_subtype: subtype === "" ? null : (subtype as SteelSubtype),
-      _rowState: "new",
-    });
-  });
-  return { rows: out, errors };
-}
-
 function ImportRowsModal({
   open,
   onClose,
@@ -188,7 +136,7 @@ function ImportRowsModal({
           order:
         </p>
         <pre className="text-[12px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 overflow-x-auto">
-{`item_code | description | unit | original_qty | revised_qty | base_rate | agreement_rate | is_cement_item (TRUE/FALSE) | steel_subtype (blank, angles, plates, other_sections, tmt)`}
+{`item_code | description | unit | original_qty | revised_qty | base_rate | agreement_rate | is_cement_item (TRUE/FALSE/YES/NO/1/0, blank=false) | steel_subtype (blank, ${VALID_STEEL_SUBTYPES.join(", ")})`}
         </pre>
         <textarea
           value={raw}
@@ -283,10 +231,20 @@ function ImportRowsModal({
             type="button"
             variant="primary"
             size="sm"
-            disabled={!parsed || parsed.rows.length === 0}
+            // M-2: any parse error blocks the import. Adding only the "good"
+            // rows would silently drop the others, which for financial line
+            // items reads as "errors are non-fatal."
+            disabled={
+              !parsed ||
+              parsed.rows.length === 0 ||
+              parsed.errors.length > 0
+            }
             onClick={() => {
               if (!parsed || parsed.rows.length === 0) return;
-              onAdd(parsed.rows);
+              if (parsed.errors.length > 0) return;
+              onAdd(
+                parsed.rows.map((r) => ({ ...r, _rowState: "new" as const })),
+              );
               onClose();
             }}
           >
@@ -603,7 +561,16 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <Button type="button" variant="primary" size="sm" onClick={saveAll}>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={saveAll}
+          // REVIEW.md M-3 — backend rejects cement+steel with 422 now, but
+          // the client gate prevents a doomed round-trip and surfaces the
+          // conflict before the user clicks Save.
+          disabled={cementSteelConflicts.length > 0}
+        >
           Save all
         </Button>
         {saveProgress && (
