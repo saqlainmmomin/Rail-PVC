@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api/client";
+import { useMemo, useState } from "react";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { apiFetch, ApiError } from "@/lib/api/client";
 import { Button } from "@/components/ui/Button";
 
 interface Schedule {
@@ -24,15 +25,15 @@ interface Decision {
   notes: string | null;
 }
 
+type Verdict = "yes" | "no" | "undecided";
+
 type Row = {
   item_id: string;
   item_code: string;
   description: string;
   schedule_name: string;
-  eligible: boolean | null;
+  serverVerdict: Verdict;
 };
-
-type Verdict = "yes" | "no" | "undecided";
 
 function verdictOf(eligible: boolean | null): Verdict {
   if (eligible === true) return "yes";
@@ -75,6 +76,11 @@ export function ExtraItemDecisionList({
     return m;
   }, [decisions]);
 
+  // P5-F5 — local staged map of pending verdicts, keyed by item_id. Empty
+  // until the user toggles a row. Cleared after a successful save.
+  const [pending, setPending] = useState<Record<string, Verdict>>({});
+  const [saving, setSaving] = useState(false);
+
   const rows: Row[] = useMemo(() => {
     const out: Row[] = [];
     extraNsSchedules.forEach((s, i) => {
@@ -86,63 +92,71 @@ export function ExtraItemDecisionList({
           item_code: item.item_code,
           description: item.description,
           schedule_name: s.name,
-          eligible: d ? d.eligible : null,
+          serverVerdict: verdictOf(d ? d.eligible : null),
         });
       }
     });
     return out;
   }, [extraNsSchedules, itemQueries, decisionsByItem]);
 
-  const undecidedCount = rows.filter((r) => r.eligible === null).length;
   const isLoading = itemQueries.some((q) => q.isLoading);
 
-  const setVerdict = useMutation({
-    mutationFn: async (args: { item_id: string; eligible: boolean | null }) => {
-      await apiFetch(`/api/contracts/${contractId}/extra-item-decisions`, {
-        method: "POST",
-        body: args,
-      });
-    },
-    onMutate: async (args) => {
-      await queryClient.cancelQueries({
-        queryKey: ["extra-item-decisions", contractId],
-      });
-      const previous = queryClient.getQueryData<Decision[]>([
-        "extra-item-decisions",
-        contractId,
-      ]);
-      queryClient.setQueryData<Decision[]>(
-        ["extra-item-decisions", contractId],
-        (old) => {
-          const list = old ? [...old] : [];
-          const idx = list.findIndex((d) => d.item_id === args.item_id);
-          const stub: Decision = {
-            id: idx >= 0 ? list[idx].id : `optimistic-${args.item_id}`,
-            item_id: args.item_id,
-            eligible: args.eligible,
-            notes: null,
-          };
-          if (idx >= 0) list[idx] = stub;
-          else list.push(stub);
-          return list;
-        },
-      );
-      return { previous };
-    },
-    onError: (_err, _args, ctx) => {
-      if (ctx?.previous) {
-        queryClient.setQueryData(
-          ["extra-item-decisions", contractId],
-          ctx.previous,
-        );
+  // Effective verdict per row = pending change if any, otherwise server state.
+  // The undecided-count banner reads from this merged view so the user sees
+  // what the contract will look like *after* saving.
+  const effectiveVerdict = (r: Row): Verdict =>
+    pending[r.item_id] ?? r.serverVerdict;
+
+  const undecidedCount = rows.filter(
+    (r) => effectiveVerdict(r) === "undecided",
+  ).length;
+  const pendingCount = Object.keys(pending).length;
+
+  function toggle(itemId: string, opt: Verdict, serverVerdict: Verdict) {
+    setPending((prev) => {
+      const next = { ...prev };
+      // If the user reverts to the server's existing value, drop the pending
+      // entry so the row no longer shows as unsaved.
+      if (opt === serverVerdict) {
+        delete next[itemId];
+      } else {
+        next[itemId] = opt;
       }
-    },
-    onSettled: () => {
+      return next;
+    });
+  }
+
+  async function saveChanges() {
+    const entries = Object.entries(pending);
+    if (entries.length === 0) return;
+    setSaving(true);
+    try {
+      // Issue all upserts in parallel — failures preserve `pending` so the
+      // user can retry without losing their staged edits.
+      await Promise.all(
+        entries.map(([item_id, v]) =>
+          apiFetch(`/api/contracts/${contractId}/extra-item-decisions`, {
+            method: "POST",
+            body: { item_id, eligible: eligibleFor(v) },
+            silent: true,
+          }),
+        ),
+      );
+      setPending({});
+      toast.success(
+        `Saved ${entries.length} decision${entries.length === 1 ? "" : "s"}`,
+      );
       queryClient.invalidateQueries({
         queryKey: ["extra-item-decisions", contractId],
       });
-    },
-  });
+    } catch (err) {
+      const msg =
+        err instanceof ApiError ? err.message : "Failed to save decisions";
+      toast.error("Save failed", { description: msg });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -158,9 +172,30 @@ export function ExtraItemDecisionList({
           </div>
         ))}
 
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          disabled={pendingCount === 0 || saving}
+          onClick={saveChanges}
+        >
+          {saving
+            ? "Saving…"
+            : pendingCount > 0
+              ? `Save changes (${pendingCount})`
+              : "Save changes"}
+        </Button>
+        {pendingCount > 0 && !saving && (
+          <span className="text-[12px] text-amber-700">
+            {pendingCount} unsaved change{pendingCount === 1 ? "" : "s"}
+          </span>
+        )}
+      </div>
+
       <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
         <div
-          className="px-5 py-3 grid grid-cols-[120px_1fr_160px_220px] gap-4 text-[11px]
+          className="px-5 py-3 grid grid-cols-[120px_1fr_160px_240px] gap-4 text-[11px]
                      uppercase tracking-wider text-slate-500 font-medium
                      border-b border-slate-200 bg-slate-50"
         >
@@ -178,12 +213,13 @@ export function ExtraItemDecisionList({
           </div>
         )}
         {rows.map((r, i) => {
-          const v = verdictOf(r.eligible);
+          const v = effectiveVerdict(r);
+          const isDirty = pending[r.item_id] !== undefined;
           return (
             <div
               key={r.item_id}
               className={
-                "px-5 h-12 grid grid-cols-[120px_1fr_160px_220px] gap-4 items-center text-[13px] " +
+                "px-5 h-12 grid grid-cols-[120px_1fr_160px_240px] gap-4 items-center text-[13px] " +
                 (i < rows.length - 1 ? "border-b border-slate-100" : "")
               }
             >
@@ -192,23 +228,25 @@ export function ExtraItemDecisionList({
               </div>
               <div className="text-slate-900 truncate">{r.description}</div>
               <div className="text-slate-600">{r.schedule_name}</div>
-              <div className="flex gap-1">
+              <div className="flex gap-1 items-center">
                 {(["yes", "no", "undecided"] as Verdict[]).map((opt) => (
                   <Button
                     key={opt}
                     type="button"
                     size="sm"
                     variant={v === opt ? "primary" : "secondary"}
-                    onClick={() =>
-                      setVerdict.mutate({
-                        item_id: r.item_id,
-                        eligible: eligibleFor(opt),
-                      })
-                    }
+                    onClick={() => toggle(r.item_id, opt, r.serverVerdict)}
                   >
                     {opt === "yes" ? "Yes" : opt === "no" ? "No" : "Undecided ⚠"}
                   </Button>
                 ))}
+                {isDirty && (
+                  <span
+                    title="Unsaved change"
+                    aria-label="Unsaved change"
+                    className="ml-1 inline-block h-2 w-2 rounded-full bg-amber-500"
+                  />
+                )}
               </div>
             </div>
           );

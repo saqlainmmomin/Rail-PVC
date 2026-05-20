@@ -58,7 +58,7 @@ function toFormDefaults(c: Contract): Partial<ContractFormValues> {
     contractor_name: c.contractor_name,
     work_description: c.work_description ?? undefined,
     railway_zone: c.railway_zone,
-    base_month: c.base_month,
+    base_month: c.base_month?.slice(0, 7),  // API returns YYYY-MM-DD; month input needs YYYY-MM
     start_date: c.start_date ?? undefined,
     completion_date: c.completion_date ?? undefined,
     contract_value:

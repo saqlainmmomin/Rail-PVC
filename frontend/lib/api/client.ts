@@ -66,6 +66,7 @@ export async function apiFetch<T = unknown>(
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch (cause) {
+    console.error("[apiFetch] fetch() threw:", cause);
     const err = new ApiError(0, "Network error — is the API reachable?", { cause });
     if (!silent) {
       toast.error("Network error", {

@@ -1,21 +1,220 @@
 # WORKPLAN.md — Phase 5: Contract Setup UI
 
-**Last updated:** 2026-05-19 (Phase 5 implementation complete on `saqlain/phase-5`, uncommitted)
-**Status snapshot:** Phases 0–4 + TEST-P3P4 merged to `main`. **Phase 5 UI implementation complete (P5-001…P5-008) on `saqlain/phase-5`** — 61/61 backend tests, `next build` clean. Needs commit + manual smoke + `P5-REVIEW` before merge. Shubham's SH-P5 backend track still in progress.
+**Last updated:** 2026-05-20 (P5-F1…F5 complete; awaiting P5-REVIEW)
+**Status snapshot:** Phase 5 UI on `saqlain/phase-5` (PR #6). Smoke passed; BUG-1 fixed; P5-F1…F5 implementation landed (67/67 backend tests, `next build` clean). Ready for `P5-REVIEW`.
+
+---
+
+## Resolved Bugs
+
+| # | Bug | Resolution |
+|---|-----|------------|
+| BUG-1 | `POST /api/contracts/{id}/schedules` → 500 Internal Server Error. Root cause: `VALUES (:stype::schedule_type …)` — SQLAlchemy asyncpg dialect left `:stype` unsubstituted because `::schedule_type` breaks named-param parsing. | Fixed 2026-05-20: `CAST(:stype AS schedule_type)` in `api/schedules.py`. |
+| BUG-2 | Input sanitisation (text/number fields accept injection patterns). | Superseded by P5-F1…F5 scope; zod client-side validation already present. Backend hardening deferred post-MVP. |
+
+## Open UX Fixes (P5-F1…F5, blocking P5-REVIEW)
+
+| # | Issue | Decision | Status |
+|---|-------|----------|--------|
+| P5-F1 | Items grid column headers have no definitions — confusing fields (original_qty, revised_qty, base_rate, agreement_rate, is_cement_item, steel_subtype) | Custom AG Grid `headerComponent` with ⓘ icon + tooltip | ✅ complete |
+| P5-F2 | No Excel paste support — multi-row copy collapses to single cell | Option B: "Import rows" button → modal with `<textarea>` → TSV parse → preview → append as new rows. Column order documented in modal. (Option C file import = post-MVP) | ✅ complete |
+| P5-F3 | Items Save All always creates new rows; no update or delete | Option B: checkbox-select rows → "Delete selected" + confirm; Save All distinguishes new/dirty/persisted; backend needs `PUT` + `DELETE` for items + tests | ✅ complete |
+| P5-F4 | Mutual-exclusion warning uses engine jargon | Replace with: "One or more items are marked as both a cement item and a steel item. Each item can only belong to one — please correct before saving." | ✅ complete |
+| P5-F5 | Extra-items auto-save feels unsafe | Option B: staged local state + explicit "Save changes" button; batch POST on save; per-row unsaved indicator | ✅ complete |
 
 ---
 
 ## Next Steps (in order)
 
-1. **Commit P5-001…P5-008 on `saqlain/phase-5`** in a single meaningful commit, then push to origin.
-2. **Open PR** (`saqlain/phase-5` → `main`) with description listing the 8 tasks + acceptance criteria covered.
-3. **Manual browser smoke** (see "Manual Smoke Plan" below) — must run before review since the existing test suite does not exercise the new pages live.
-4. **Kick off `P5-REVIEW`** — Codex-S adversarial pass; record findings in `REVIEW.md`.
-5. **Resolve any CRITICAL/HIGH findings** from review; iterate until clean.
-6. **Merge `saqlain/phase-5`** to `main` once review is clean (no CRITICAL/HIGH).
-7. **Delete merged branches**: `saqlain/phase-5`, `saqlain/test-p3p4` (and any older merged remotes).
-8. **Sync with Shubham on SH-P5 progress** (G-1/G-2/G-3) — coordinate `SH-P5-REVIEW` once his branch is ready.
-9. **Phase 6 kickoff once both Phase 5 merge + SH-P5 G-1/G-2 are on `main`** — bill entry UI (C-1…C-3).
+1. **Implement P5-F1…F5** — use the implementation prompt below in a fresh CC chat.
+2. **Kick off `P5-REVIEW`** — Codex-S adversarial pass once P5-F1…F5 are committed; record findings in `REVIEW.md`.
+3. **Resolve any CRITICAL/HIGH findings** from review; iterate until clean.
+4. **Merge `saqlain/phase-5`** to `main` once review is clean.
+5. **Delete merged branches**: `saqlain/phase-5`, `saqlain/test-p3p4`.
+6. **Phase 6 kickoff** once Phase 5 merge + SH-P5 G-1/G-2 are on `main` — bill entry UI (C-1…C-3).
+
+---
+
+## P5-F Implementation Prompt
+
+> Paste this verbatim into a fresh Claude Code chat to implement P5-F1…F5.
+
+---
+
+```
+You are implementing five UX polish fixes (P5-F1…F5) on the RailPVC project, branch `saqlain/phase-5`.
+
+Start by reading these files in order:
+1. STATUS.md
+2. ENGINEERING_GUIDELINES.md
+3. TASKS.md (find the P5-F1…F5 rows for acceptance criteria)
+4. backend/api/contract_items.py  (tenant gate pattern for items)
+5. backend/api/schedules.py       (existing items POST + schedule_type CAST pattern)
+6. frontend/components/contracts/ItemsGrid.tsx
+7. frontend/components/contracts/ExtraItemDecisionList.tsx
+8. frontend/app/(app)/contracts/[id]/extra-items/page.tsx
+
+Then implement the five fixes below in a single working session. Commit everything in one or two logical commits on `saqlain/phase-5` when done. Run the backend test suite (`cd backend && python -m pytest -x -q`) before committing — it must stay green.
+
+---
+
+## P5-F1 — Items grid column-header tooltips
+
+**Files:** `frontend/components/contracts/ItemsGrid.tsx`
+
+Create a `TooltipHeader` component (can be inline in the same file) that renders the column header label + a small ⓘ character. On mouse hover over the ⓘ, show a tooltip with the field definition. Use a `title` attribute on a `<span>` wrapping the ⓘ — no external tooltip library needed.
+
+Register it as `headerComponent: TooltipHeader` on the following columns only, passing `headerName` + a `tooltipText` via `headerComponentParams`:
+
+| Column | Tooltip text |
+|--------|-------------|
+| `original_qty` | Quantity as specified in the original LOA/agreement |
+| `revised_qty` | Quantity after amendment or deviation order; used for billing when set |
+| `base_rate` | Schedule rate before bid discount (DSR/NS published rate) |
+| `agreement_rate` | Rate after applying the bid discount; this is the rate used in bills |
+| `is_cement_item` | Mark if this item falls under the cement PVC bucket (affects which price index series is applied) |
+| `steel_subtype` | Mark if this item falls under the steel PVC bucket; the subtype maps to a specific steel index series |
+
+**Acceptance criteria:** All six columns show the ⓘ in the header; hovering ⓘ shows the definition text. Other columns are unchanged.
+
+---
+
+## P5-F2 — Excel paste import dialog
+
+**Files:** `frontend/components/contracts/ItemsGrid.tsx`
+
+Add an "Import rows" button in the toolbar above the AG Grid (next to the existing "+ Add row" button). Clicking it opens a modal (can be a simple absolutely-positioned overlay — no external modal library). The modal contains:
+
+1. A one-line instruction: "Copy a range from Excel, then paste it here. Columns must be in this order:"
+2. A code block or `<pre>` listing the expected column order:
+   `item_code | description | unit | original_qty | revised_qty | base_rate | agreement_rate | is_cement_item (TRUE/FALSE) | steel_subtype (blank, angles, plates, other_sections, tmt)`
+3. A `<textarea>` (tall, monospace font) where the user pastes.
+4. A "Preview" button that parses the textarea content as TSV (tab-separated, newline per row) and renders a small preview table of the parsed rows below the textarea. Show a parse error if the column count doesn't match.
+5. An "Add N rows" button that appends the parsed rows to the grid as new rows (same `_rowState: "new"` as "+ Add row"). Closes the modal on click.
+6. A "Cancel" button.
+
+**Parsing logic:**
+- Split on `\n`; skip blank lines
+- Split each line on `\t`
+- Map positionally to: item_code (str), description (str), unit (str), original_qty (number), revised_qty (number or null if blank), base_rate (number), agreement_rate (number), is_cement_item (boolean: "TRUE"/"true"/"1" → true, else false), steel_subtype (blank/"" → null, else use value as-is)
+- If a row has fewer than 8 columns, mark it as a parse error and don't include it in the preview
+
+**Acceptance criteria:** Button visible above grid; modal opens; pasting 3 rows from Excel and clicking "Add 3 rows" appends those rows to the grid; modal closes; rows appear with `_rowState: "new"` (behave like manually added rows for Save All).
+
+---
+
+## P5-F3 — Items CRUD (update + delete)
+
+### Backend
+
+**File:** `backend/api/contract_items.py`
+
+Read this file carefully before writing anything. Follow the existing tenant gate pattern exactly.
+
+Add two endpoints:
+
+**`PUT /api/schedules/{schedule_id}/items/{item_id}`**
+- Tenant gate: verify item belongs to schedule AND schedule belongs to a contract owned by the request's `tenant_id`. Do this in two queries: (1) fetch the item's `schedule_id` and verify it matches the URL param, (2) call `assert_contract_belongs_to_tenant` via the schedule's `contract_id`.
+- Body: same updatable fields as the existing POST (item_code, description, unit, original_qty, revised_qty, base_rate, agreement_rate, is_cement_item, steel_subtype). Use a `ContractItemUpdate` Pydantic model with all fields Optional; use `model_fields_set` to build the SET clause so unset fields don't overwrite existing values.
+- Returns the updated row (same shape as POST response).
+- Wrong schedule_id → 404 NotFoundProblem. Wrong tenant → 404 NotFoundProblem.
+
+**`DELETE /api/schedules/{schedule_id}/items/{item_id}`**
+- Same tenant gate as PUT.
+- Hard delete.
+- Returns 204 No Content.
+- Wrong schedule_id or wrong tenant → 404 NotFoundProblem.
+
+**Tests:** Add `backend/tests/test_p5_f3_items_crud.py` with:
+- PUT: valid update returns updated fields
+- PUT: wrong schedule_id → 404
+- PUT: wrong tenant → 404
+- DELETE: valid delete → 204; subsequent GET returns empty list
+- DELETE: wrong schedule_id → 404
+- DELETE: wrong tenant → 404
+
+Also bump the route count assertion in `backend/tests/test_p3_08.py` by 2 (29 → 31).
+
+### Frontend
+
+**File:** `frontend/components/contracts/ItemsGrid.tsx`
+
+**Row state tracking:** Add a `_rowState: "new" | "dirty" | "persisted"` field to each row object. This field is never sent to the backend.
+- Rows loaded from `GET /api/schedules/{id}/items` → `_rowState: "persisted"`, include their real `id`
+- Rows added via "+ Add row" or "Import rows" → `_rowState: "new"`, `id: undefined`
+- When the user edits a cell in a `"persisted"` row → `_rowState: "dirty"` (use AG Grid's `onCellValueChanged` callback)
+
+**Save All update:**
+- `"new"` rows → POST (existing logic); on success set `_rowState: "persisted"` and store the returned `id`
+- `"dirty"` rows → `PUT /api/schedules/{scheduleId}/items/{row.id}`; on success set `_rowState: "persisted"`
+- `"persisted"` rows with no edits → skip
+
+**Delete:**
+- Add a checkbox selection column to the grid (`checkboxSelection: true` on the first column; `headerCheckboxSelection: true`)
+- Show a "Delete selected (N)" button in the toolbar when ≥1 row is selected
+- On click:
+  - For rows where `_rowState === "new"`: remove from grid immediately (no API call)
+  - For rows where `_rowState === "dirty"` or `"persisted"`: show `window.confirm("Delete N item(s)? This cannot be undone.")` — if confirmed, call `DELETE /api/schedules/{scheduleId}/items/{row.id}` for each, then remove from grid
+  - Deselect all after deletion
+
+**Acceptance criteria:**
+- Loading existing items shows them in the grid; editing a cell and clicking Save All calls PUT (not POST) for that row
+- Adding a new row and clicking Save All calls POST for that row only
+- Checkbox-selecting 2 saved rows and clicking Delete → confirm → both rows removed from grid and from DB
+- Selecting 1 unsaved row and clicking Delete → removed immediately, no confirm, no API call
+
+---
+
+## P5-F4 — Mutual-exclusion warning copy
+
+**File:** `frontend/components/contracts/ItemsGrid.tsx`
+
+Find the amber warning banner that fires when a row has `is_cement_item === true` AND `steel_subtype !== null`. Replace the message text with:
+
+"One or more items are marked as both a cement item and a steel item. Each item can only belong to one — please correct before saving."
+
+**Acceptance criteria:** Old engine-jargon text is gone. New text is user-facing. Banner still appears under the same condition.
+
+---
+
+## P5-F5 — Extra-items manual save (staged changes)
+
+**Files:**
+- `frontend/components/contracts/ExtraItemDecisionList.tsx`
+- `frontend/app/(app)/contracts/[id]/extra-items/page.tsx`
+
+Replace the current auto-save-on-toggle pattern with explicit staged saves.
+
+**New behaviour:**
+1. On mount, load decisions from the API as before. Store them in component state as the "server state".
+2. Also maintain a `pendingChanges: Record<string, "Yes" | "No" | "Undecided">` map in state. This starts empty.
+3. When the user clicks a Yes/No/Undecided button: update `pendingChanges[itemId]` — do NOT call the API yet. The displayed value for a row is `pendingChanges[itemId] ?? serverState[itemId]`.
+4. Rows with a pending change show a small amber dot or "(unsaved)" label next to the toggle buttons.
+5. A "Save changes" button appears (or activates) when `Object.keys(pendingChanges).length > 0`. Show how many changes are pending in the button label: "Save changes (3)".
+6. On "Save changes" click:
+   - Disable the button, show "Saving…"
+   - Call `POST /api/contracts/{id}/extra-item-decisions` for each entry in `pendingChanges` (can be in parallel via Promise.all)
+   - On full success: merge `pendingChanges` into `serverState`, clear `pendingChanges`, update the banner (undecided count), show a success toast "Saved N decision(s)"
+   - On any failure: show error toast, keep `pendingChanges` intact so the user can retry
+7. The existing undecided-count banner logic should read from the merged view (server + pending) so it reflects what will be saved.
+
+**Acceptance criteria:**
+- Toggling a decision does NOT make an API call
+- Amber dot appears on rows with pending changes
+- "Save changes (N)" button is active only when N > 0
+- Clicking Save makes exactly one POST per changed item; on success the pending indicators clear
+- On API failure the pending changes are preserved and the error toast appears
+
+---
+
+## After all five fixes
+
+1. Run `cd backend && python -m pytest -x -q` — must be green (≥63 tests passing: 61 existing + 6 new from P5-F3).
+2. Run `cd frontend && npm run build` — must be clean with 0 type errors.
+3. Commit to `saqlain/phase-5` with message: "P5-F1…F5: items grid UX + CRUD + extra-items staged save"
+4. Update WORKPLAN.md: mark P5-F1…F5 as complete in the Open UX Fixes table.
+5. Do NOT kick off P5-REVIEW — that is a separate step done by the human.
+```
 
 ### Manual Smoke Plan (before P5-REVIEW)
 

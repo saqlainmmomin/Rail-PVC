@@ -6,25 +6,25 @@ This file is the shortest path to current branch state, blockers, and next actio
 
 ## Current Phase
 
-- **Active workstream (Saqlain):** Phase 5 — contract setup UI (P5-001…P5-008) **implementation complete** on `saqlain/phase-5` (2026-05-19); awaiting `P5-REVIEW` (Codex-S) before merge to `main`.
+- **Active workstream (Saqlain):** Phase 5 — UX polish fixes **P5-F1…F5 implementation complete** on `saqlain/phase-5` (2026-05-20). 67/67 backend tests passing, `next build` clean. Awaiting `P5-REVIEW` (Codex-S) before merge to `main`.
 - **Active workstream (Shubham):** SH-P5 — GET bill endpoints + export backend (parallel to Phase 5 UI).
 - TEST-P3P4 complete: TEST-01…07 all merged to `main` (fast-forwarded from `saqlain/test-p3p4`, 2026-05-19).
 - Phase 3 backfill + Phase 4 complete: all on `main`.
 
 ## Current Blockers
 
-- None. No open CRITICAL/HIGH findings.
+- None blocking. No open CRITICAL/HIGH findings.
 - Out-of-band: credential hygiene — DB password and JWT secret are in `backend/.env` (git-ignored). Keep `.env` out of version control.
 
 ## Active Review Cycle
 
-- `P5-REVIEW` pending: Codex-S adversarial pass on `saqlain/phase-5` (P5-001…P5-008). Branch is local + uncommitted at the time of writing; commit + push before kicking off review.
-- Suite state on branch: **61/61 backend tests passing** (55 prior + 5 new for PUT + 1 route count bump), **99/99 engine tests** unchanged, `next build` clean (3 new routes: `/contracts/new`, `/contracts/[id]`, `/contracts/[id]/extra-items`).
+- `P5-REVIEW` pending: Codex-S adversarial pass on `saqlain/phase-5` (P5-001…P5-008 + P5-F1…F5). Ready to kick off.
+- Suite state on branch: **67/67 backend tests passing** (61 prior + 6 new for P5-F3 PUT/DELETE; route count bumped 29→31), **99/99 engine tests** unchanged, `next build` clean.
 
 ## Branch State
 
 - `main` — last commit `22ba97c` (docs sync 2026-05-19).
-- `saqlain/phase-5` — **Phase 5 implementation complete, uncommitted**. Contains: backend PUT `/api/contracts/{id}` + expanded GET; frontend zod schema + zones; ContractForm + ZoneSelect + ScheduleForm + ItemsGrid + ExtraItemDecisionList; `/contracts/new`, `/contracts/[id]`, `/contracts/[id]/extra-items` pages.
+- `saqlain/phase-5` — Phase 5 implementation + P5-F1…F5 complete (PR #6). Smoke test passed 2026-05-20. BUG-1 fixed (`CAST(:stype AS schedule_type)`). `base_month` edit-mode fix included. Awaiting P5-REVIEW.
 - `shubham/phase-5-backend` — Shubham's parallel track (GET bills + exports), in progress.
 - Deletable: `saqlain/test-p3p4` (already merged).
 
@@ -49,10 +49,9 @@ This file is the shortest path to current branch state, blockers, and next actio
 
 ## Current Priorities
 
-1. [CC-S] Commit + push `saqlain/phase-5`, open PR, run live browser smoke (the 4 flows in WORKPLAN "Manual Smoke Plan"), then kick off `P5-REVIEW`.
-2. [CC-S] Resolve any findings from `P5-REVIEW`; merge `saqlain/phase-5` once clean.
+1. [CC-S] Push `saqlain/phase-5` to origin; kick off `P5-REVIEW` (Codex-S adversarial pass).
+2. [CC-S] Resolve any P5-REVIEW findings; merge `saqlain/phase-5` once clean.
 3. [CC-SH] Continue SH-P5 backend (G-1 → G-2 → G-3); request `SH-P5-REVIEW` before merge.
-4. Credential hygiene — DB password + JWT secret are in `backend/.env` only (git-ignored). Document in onboarding.
 
 ## File Classification
 

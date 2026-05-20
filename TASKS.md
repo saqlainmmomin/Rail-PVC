@@ -81,7 +81,7 @@ Status: scaffold complete (on main); live integration unblocked
 
 ### Phase 5 UI — Contract Setup `[CC-S]`
 
-Status: **implementation complete (2026-05-19)** — branch `saqlain/phase-5`, uncommitted at time of writing. 61/61 backend tests + `next build` clean. Awaiting commit/push + manual smoke + `P5-REVIEW`.
+Status: **implementation complete (P5-001…P5-008 on 2026-05-19; P5-F1…F5 on 2026-05-20)** — branch `saqlain/phase-5`. 67/67 backend tests + `next build` clean. Smoke passed 2026-05-20. Awaiting `P5-REVIEW`.
 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
@@ -93,6 +93,11 @@ Status: **implementation complete (2026-05-19)** — branch `saqlain/phase-5`, u
 | P5-006 / B-4 | Schedules tab + `ScheduleForm` | [CC-S] | complete | DSR/NS/ExtraNS select; `bid_discount_pct` as fraction; deferred fetch via `enabled` |
 | P5-007 / B-5 | Items tab — `ItemsGrid` (AG Grid) | [CC-S] | complete | Community module registration; cement+steel mutual-exclusion warning; **Save All** with sequential POST + progress |
 | P5-008 | `/contracts/[id]/extra-items` page | [CC-S] | complete | Optimistic Yes/No/Undecided toggles; banner switches on undecided count |
+| P5-F1 | Items grid: column-header tooltips (ⓘ icon) | [CC-S] | complete | `TooltipHeader` AG Grid header component; ⓘ + native `title` on 6 columns |
+| P5-F2 | Items grid: Excel paste import dialog | [CC-S] | complete | "Import rows" button → `ImportRowsModal` with `<textarea>` → `parseTsvImport` → preview table → append as `_rowState: "new"` |
+| P5-F3 | Items grid: proper CRUD (update + delete) | [CC-S] | complete | Backend: `PUT/DELETE /api/schedules/{id}/items/{item_id}` with two-step tenant gate (`_assert_item_under_schedule_for_tenant`) + 6 new tests; route count 29→31. Frontend: `_rowState: new/dirty/persisted`; Save All routes new→POST, dirty→PUT; checkbox column + "Delete selected (N)" with confirm for persisted rows |
+| P5-F4 | Items grid: fix mutual-exclusion warning copy | [CC-S] | complete | Banner rewritten to user-facing copy |
+| P5-F5 | Extra-items: explicit Save button (staged changes) | [CC-S] | complete | `pending` local map; toggles update state only; "Save changes (N)" runs `Promise.all` POSTs; amber dot per dirty row; on failure pending preserved; banner reads merged view |
 
 ### SH-P5 — GET Bill Endpoints + Export Backend `[CC-SH]`
 

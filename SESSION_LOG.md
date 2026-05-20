@@ -14,15 +14,51 @@ Use it for current milestone decisions and recent sessions only.
 ## Current Project State
 
 - Phases 0–4 + Phase 3 backfill + TEST-P3P4: all complete on `main` as of 2026-05-19.
-- **Phase 5 UI: implementation complete on `saqlain/phase-5` (uncommitted) — 61/61 backend, `next build` clean. Awaiting commit + push + P5-REVIEW.**
+- **Phase 5 UI: P5-001…P5-008 + P5-F1…F5 implementation complete on `saqlain/phase-5` (PR #6). Awaiting P5-REVIEW.**
 - Active (parallel): GET bill endpoints + export backend (Shubham, `shubham/phase-5-backend`).
-- Test suite on branch: 61/61 backend, 99/99 engine. No open CRITICAL/HIGH findings.
-- Local backend: `cd backend && uv run uvicorn main:app --reload --port 8000`
-- Local frontend: `cd frontend && npm start` (port 3000)
+- Test suite on branch: 67/67 backend, 99/99 engine. No open CRITICAL/HIGH findings.
+- Local backend: `cd backend && source .venv/bin/activate && uvicorn main:app --reload --port 8000`
+- Local frontend: `cd frontend && npm run build && npm start` (port 3000) — always rebuild after code changes
 - DB: Supabase at `ivselmhloegjmqrjekcy.supabase.co`, migrations at head (012).
 - Tenant provisioned for `saqlainmmomin@gmail.com` — tenant_id `bd589426-93ba-4847-b5f3-1f69b020b4c0`.
 
 ## Recent Sessions
+
+### Session 18 — 2026-05-20 (P5-F1…F5 implementation landed)
+
+- Implemented all five UX polish fixes in one session on `saqlain/phase-5`.
+- **F1** — `TooltipHeader` custom AG Grid `headerComponent` with ⓘ icon + native `title` attribute; wired on `original_qty`, `revised_qty`, `base_rate`, `agreement_rate`, `is_cement_item`, `steel_subtype`. No external tooltip library.
+- **F2** — "Import rows" toolbar button opens `ImportRowsModal` (absolutely-positioned overlay, no modal lib). `parseTsvImport` splits on `\n` / `\t`, normalises `is_cement_item` (TRUE/true/1/yes → true), and accepts blank `steel_subtype` as null. Preview table + parse-error list before commit; rows append as `_rowState: "new"`.
+- **F3 backend** — `PUT` + `DELETE /api/schedules/{schedule_id}/items/{item_id}` in `backend/api/contract_items.py`. New helper `_assert_item_under_schedule_for_tenant` runs the two-step gate: first `assert_schedule_belongs_to_tenant` (tenant ownership of the schedule), then verify the item's `schedule_id` matches the URL. Either failure → 404 NotFoundProblem. `ContractItemUpdate` uses the established `model_fields_set` partial-update pattern; `steel_subtype` keeps the explicit ENUM cast (`CAST(:steel_subtype AS steel_subtype)`). 6 new tests in `test_p5_f3_items_crud.py` (PUT valid / wrong-schedule / wrong-tenant; DELETE valid / wrong-schedule / wrong-tenant). Route count assertion in `test_p3_08_clean_import.py` bumped 29 → 31.
+- **F3 frontend** — `_rowState: "new" | "dirty" | "persisted"` per row. Loaded items default to `persisted`; cell edits demote `persisted → dirty` (never demote `new`). Save All routes `new → POST`, `dirty → PUT`, `persisted → skip`. Added a multi-select checkbox column (`checkboxSelection` on `item_code`, `headerCheckboxSelection`, `rowSelection="multiple"`, `suppressRowClickSelection`). "Delete selected (N)" appears when ≥1 row is selected; new rows are removed in-memory without API calls or confirms; persisted/dirty rows trigger `window.confirm(...)` then sequential `DELETE` calls, with the query invalidated only when persisted rows were touched.
+- **F4** — One-line banner copy rewrite ("One or more items are marked as both a cement item and a steel item. Each item can only belong to one — please correct before saving.").
+- **F5** — `ExtraItemDecisionList` rewritten around a local `pending: Record<itemId, Verdict>` map. Toggling a row updates `pending` only; clicking back to the server value drops the entry (so it stops showing as unsaved). Effective verdict for a row = `pending[id] ?? serverVerdict`; the undecided-count banner reads this merged view. "Save changes (N)" is enabled only when `pending` is non-empty, runs `Promise.all` of POSTs with `silent: true` (we render our own toast), preserves `pending` on failure for retry, and invalidates the decisions query on success. Per-row amber dot indicates a pending change.
+- **Verification** — `cd backend && uv run python -m pytest -x -q` → 67 passed (61 prior + 6 new). `cd frontend && npm run build` → clean, 0 TS errors.
+- **Lessons captured (used during implementation):**
+  - aiosqlite doesn't bind `Decimal` to parameter values — tests with NUMERIC columns must use plain ints/floats. The Postgres `::text` casts in SELECT-back paths still fail under aiosqlite; the established pattern is to catch `OperationalError` and verify the UPDATE/DELETE landed via a plain follow-up `SELECT` (see `test_p5_001_contracts_put.py`).
+  - The two-step gate (`assert_schedule_belongs_to_tenant` then per-item membership check) preserves the "wrong-tenant collapses to the same 404 as wrong-schedule" rule — no information leak.
+  - `apiFetch` supports `{ silent: true }` to suppress the default Sonner toast; useful when the caller renders its own success/error UI (F5 batch save).
+
+### Session 17 — 2026-05-20 (Smoke test complete; BUG-1 fixed; P5-F1…F5 planned)
+
+- Restarted backend + frontend. BUG-1 diagnosed from browser devtools Network tab: actual error was **500 Internal Server Error**, not a network failure. The "Network error" toast was a misdiagnosis from the previous session.
+- Root cause of 500: `INSERT INTO schedules VALUES (:stype::schedule_type …)` — SQLAlchemy's asyncpg dialect left `:stype` unsubstituted because `::schedule_type` immediately follows and breaks named-param parsing. Fix: `CAST(:stype AS schedule_type)`. One-line change in `backend/api/schedules.py`. CORS and auth were never the issue.
+- Smoke test completed: all 7 flows green (Create, Edit, Validation, Schedules, Items, Mutual-exclusion warning, Extra-items).
+- Saqlain ran live testing and raised 5 UX observations:
+  1. Column tooltips needed on confusing Items grid fields (original_qty, revised_qty, base_rate, agreement_rate, is_cement_item, steel_subtype)
+  2. No Excel paste support — multi-row copy from Excel collapses into a single cell. Decision: Option B (paste-area import dialog with TSV parsing + row preview), with Option C (file import) as a post-MVP addition.
+  3. Items Save All always creates new rows — no update or delete. Decision: Option B (checkbox-select + "Delete selected" with confirmation; Save All distinguishes new/dirty/persisted rows; backend needs PUT + DELETE endpoints for items).
+  4. Mutual-exclusion warning uses engine jargon ("engine treats these as mutually exclusive buckets"). Fix: user-facing copy.
+  5. Extra-items auto-save feels unsafe. Decision: Option B (staged local changes + explicit "Save changes" button; batch POST on save).
+- All 5 issues captured as P5-F1…F5 in TASKS.md. Implementation prompt written in WORKPLAN.md.
+- P5-REVIEW is now gated on P5-F1…F5 landing.
+
+### Session 16 — 2026-05-20 (Partial smoke; BUG-1 misdiagnosed as network error)
+
+- Rebuilt frontend after finding stale bundle. Flows 1–3 (Create, Edit, Validation) passed.
+- Flow 4 (Schedules) blocked — "Network error" toast on schedule POST. Investigated CORS + auth, found nothing. Root cause not identified (diagnosed in Session 17).
+- `base_month` edit-mode fix committed to working tree (`toFormDefaults` slices to `YYYY-MM`).
+- Servers shut down at end of session.
 
 ### Session 15 — 2026-05-19 (Phase 5 UI implementation — P5-001…P5-008 landed on `saqlain/phase-5`)
 
@@ -59,8 +95,6 @@ Detailed notes moved to git history and [archive/SESSION_LOG_ARCHIVE.md](archive
 
 ## Next Actions
 
-1. [CC-S] Commit P5-001…P5-008 on `saqlain/phase-5`, push to origin, open PR.
-2. [CC-S] Run live browser smoke (create → detail → edit → schedule → items → extra-items) against localhost stack before review.
-3. [CODEX-S] `P5-REVIEW` adversarial pass on `saqlain/phase-5`.
-4. [CC-S] Resolve P5-REVIEW findings; merge `saqlain/phase-5` once clean.
-5. [CC-SH] Continue SH-P5 (G-1 → G-2 → G-3); request `SH-P5-REVIEW` before merge.
+1. [CC-S] Push `saqlain/phase-5` to origin; kick off `P5-REVIEW` (Codex-S adversarial pass).
+2. [CC-S] Resolve P5-REVIEW findings; merge `saqlain/phase-5` once clean.
+3. [CC-SH] Continue SH-P5 (G-1 → G-2 → G-3); request `SH-P5-REVIEW` before merge.

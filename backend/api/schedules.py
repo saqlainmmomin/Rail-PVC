@@ -60,7 +60,7 @@ async def create_schedule(
         await session.execute(
             text("""
                 INSERT INTO schedules (contract_id, name, schedule_type, bid_discount_pct)
-                VALUES (:cid, :name, :stype::schedule_type, :disc)
+                VALUES (:cid, :name, CAST(:stype AS schedule_type), :disc)
                 RETURNING id::text AS id, created_at
             """),
             {

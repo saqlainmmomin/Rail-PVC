@@ -8,6 +8,8 @@ import {
   ModuleRegistry,
   themeQuartz,
   type ColDef,
+  type IHeaderParams,
+  type SelectionChangedEvent,
 } from "ag-grid-community";
 import { Button } from "@/components/ui/Button";
 import { apiFetch, ApiError } from "@/lib/api/client";
@@ -35,9 +37,12 @@ interface ContractItem {
   steel_subtype: SteelSubtype;
 }
 
+// Per-row tracking. `_rowState` is local-only and is stripped before any
+// request body is constructed. "new" rows POST, "dirty" rows PUT, "persisted"
+// rows skip.
+type RowStateTag = "new" | "dirty" | "persisted";
 type RowState = ContractItem & {
-  _isNew?: boolean;
-  _dirty?: boolean;
+  _rowState: RowStateTag;
 };
 
 function emptyRow(): RowState {
@@ -51,9 +56,248 @@ function emptyRow(): RowState {
     agreement_rate: null,
     is_cement_item: false,
     steel_subtype: null,
-    _isNew: true,
-    _dirty: true,
+    _rowState: "new",
   };
+}
+
+function itemPayload(r: RowState) {
+  return {
+    item_code: r.item_code,
+    description: r.description,
+    unit: r.unit,
+    original_qty: r.original_qty,
+    revised_qty: r.revised_qty,
+    base_rate: r.base_rate,
+    agreement_rate: r.agreement_rate,
+    is_cement_item: r.is_cement_item,
+    steel_subtype: r.steel_subtype,
+  };
+}
+
+// P5-F1 — column-header tooltip via a custom AG Grid headerComponent. No
+// external tooltip lib; we lean on the browser's native `title` attribute.
+function TooltipHeader(
+  props: IHeaderParams & { tooltipText?: string },
+) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span>{props.displayName}</span>
+      {props.tooltipText && (
+        <span
+          title={props.tooltipText}
+          className="text-slate-400 hover:text-slate-600 cursor-help"
+          aria-label={props.tooltipText}
+        >
+          ⓘ
+        </span>
+      )}
+    </span>
+  );
+}
+
+// P5-F2 — parse a TSV blob pasted from Excel into RowState[]. Column order
+// is fixed and documented in the modal itself.
+type ParseResult = {
+  rows: RowState[];
+  errors: string[];
+};
+
+function parseTsvImport(raw: string): ParseResult {
+  const out: RowState[] = [];
+  const errors: string[] = [];
+  const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  lines.forEach((line, idx) => {
+    const cols = line.split("\t");
+    if (cols.length < 8) {
+      errors.push(
+        `Row ${idx + 1}: expected 8–9 columns, got ${cols.length}`,
+      );
+      return;
+    }
+    const [
+      item_code,
+      description,
+      unit,
+      original_qty,
+      revised_qty,
+      base_rate,
+      agreement_rate,
+      is_cement_item,
+      steel_subtype,
+    ] = cols;
+    const num = (s: string): number | null => {
+      const t = (s ?? "").trim();
+      if (t === "") return null;
+      const n = Number(t);
+      return Number.isNaN(n) ? null : n;
+    };
+    const cement = ["true", "1", "yes"].includes(
+      (is_cement_item ?? "").trim().toLowerCase(),
+    );
+    const subtype = (steel_subtype ?? "").trim();
+    out.push({
+      item_code: item_code.trim(),
+      description: description.trim(),
+      unit: unit.trim(),
+      original_qty: num(original_qty),
+      revised_qty: num(revised_qty),
+      base_rate: num(base_rate),
+      agreement_rate: num(agreement_rate),
+      is_cement_item: cement,
+      steel_subtype: subtype === "" ? null : (subtype as SteelSubtype),
+      _rowState: "new",
+    });
+  });
+  return { rows: out, errors };
+}
+
+function ImportRowsModal({
+  open,
+  onClose,
+  onAdd,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAdd: (rows: RowState[]) => void;
+}) {
+  const [raw, setRaw] = useState("");
+  const [parsed, setParsed] = useState<ParseResult | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setRaw("");
+      setParsed(null);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-6"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto p-6 space-y-4">
+        <h2 className="text-[16px] font-semibold text-slate-900">
+          Import rows from Excel
+        </h2>
+        <p className="text-[13px] text-slate-600">
+          Copy a range from Excel, then paste it here. Columns must be in this
+          order:
+        </p>
+        <pre className="text-[12px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 overflow-x-auto">
+{`item_code | description | unit | original_qty | revised_qty | base_rate | agreement_rate | is_cement_item (TRUE/FALSE) | steel_subtype (blank, angles, plates, other_sections, tmt)`}
+        </pre>
+        <textarea
+          value={raw}
+          onChange={(e) => {
+            setRaw(e.target.value);
+            setParsed(null);
+          }}
+          rows={10}
+          className="w-full font-mono text-[12px] border border-slate-200 rounded-lg px-3 py-2"
+          placeholder="Paste TSV here…"
+        />
+        {parsed && parsed.errors.length > 0 && (
+          <div className="text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <div className="font-medium mb-1">Parse errors:</div>
+            <ul className="list-disc list-inside space-y-0.5">
+              {parsed.errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {parsed && parsed.rows.length > 0 && (
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <div className="px-3 py-2 text-[12px] font-medium text-slate-700 bg-slate-50 border-b border-slate-200">
+              Preview ({parsed.rows.length} row
+              {parsed.rows.length === 1 ? "" : "s"})
+            </div>
+            <div className="max-h-48 overflow-auto">
+              <table className="w-full text-[12px]">
+                <thead className="text-slate-500">
+                  <tr>
+                    <th className="px-2 py-1 text-left">Code</th>
+                    <th className="px-2 py-1 text-left">Description</th>
+                    <th className="px-2 py-1 text-left">Unit</th>
+                    <th className="px-2 py-1 text-right">Orig</th>
+                    <th className="px-2 py-1 text-right">Rev</th>
+                    <th className="px-2 py-1 text-right">Base</th>
+                    <th className="px-2 py-1 text-right">Agt</th>
+                    <th className="px-2 py-1 text-left">Cement</th>
+                    <th className="px-2 py-1 text-left">Steel</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsed.rows.map((r, i) => (
+                    <tr key={i} className="border-t border-slate-100">
+                      <td className="px-2 py-1 font-mono">{r.item_code}</td>
+                      <td className="px-2 py-1">{r.description}</td>
+                      <td className="px-2 py-1">{r.unit}</td>
+                      <td className="px-2 py-1 text-right">
+                        {r.original_qty ?? ""}
+                      </td>
+                      <td className="px-2 py-1 text-right">
+                        {r.revised_qty ?? ""}
+                      </td>
+                      <td className="px-2 py-1 text-right">
+                        {r.base_rate ?? ""}
+                      </td>
+                      <td className="px-2 py-1 text-right">
+                        {r.agreement_rate ?? ""}
+                      </td>
+                      <td className="px-2 py-1">
+                        {r.is_cement_item ? "yes" : ""}
+                      </td>
+                      <td className="px-2 py-1">{r.steel_subtype ?? ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={onClose}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => setParsed(parseTsvImport(raw))}
+            disabled={raw.trim().length === 0}
+          >
+            Preview
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            disabled={!parsed || parsed.rows.length === 0}
+            onClick={() => {
+              if (!parsed || parsed.rows.length === 0) return;
+              onAdd(parsed.rows);
+              onClose();
+            }}
+          >
+            {parsed && parsed.rows.length > 0
+              ? `Add ${parsed.rows.length} row${parsed.rows.length === 1 ? "" : "s"}`
+              : "Add rows"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
@@ -67,13 +311,18 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
   const [rows, setRows] = useState<RowState[]>([]);
   const [saveProgress, setSaveProgress] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
   const gridRef = useRef<AgGridReact<RowState>>(null);
 
   useEffect(() => {
     if (itemsQuery.data) {
-      setRows(itemsQuery.data.map((r) => ({ ...r })));
+      setRows(
+        itemsQuery.data.map((r) => ({ ...r, _rowState: "persisted" as const })),
+      );
       setSaveProgress(null);
       setSaveError(null);
+      setSelectedCount(0);
     }
   }, [itemsQuery.data]);
 
@@ -84,8 +333,20 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
 
   const columnDefs = useMemo<ColDef<RowState>[]>(
     () => [
-      { field: "item_code", headerName: "Code", editable: true, width: 110 },
-      { field: "description", headerName: "Description", editable: true, flex: 2 },
+      {
+        field: "item_code",
+        headerName: "Code",
+        editable: true,
+        width: 130,
+        checkboxSelection: true,
+        headerCheckboxSelection: true,
+      },
+      {
+        field: "description",
+        headerName: "Description",
+        editable: true,
+        flex: 2,
+      },
       { field: "unit", headerName: "Unit", editable: true, width: 80 },
       {
         field: "original_qty",
@@ -93,6 +354,11 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
         editable: true,
         width: 110,
         cellDataType: "number",
+        headerComponent: TooltipHeader,
+        headerComponentParams: {
+          tooltipText:
+            "Quantity as specified in the original LOA/agreement",
+        },
       },
       {
         field: "revised_qty",
@@ -100,6 +366,11 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
         editable: true,
         width: 110,
         cellDataType: "number",
+        headerComponent: TooltipHeader,
+        headerComponentParams: {
+          tooltipText:
+            "Quantity after amendment or deviation order; used for billing when set",
+        },
       },
       {
         field: "base_rate",
@@ -107,6 +378,11 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
         editable: true,
         width: 120,
         cellDataType: "number",
+        headerComponent: TooltipHeader,
+        headerComponentParams: {
+          tooltipText:
+            "Schedule rate before bid discount (DSR/NS published rate)",
+        },
       },
       {
         field: "agreement_rate",
@@ -114,25 +390,40 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
         editable: true,
         width: 140,
         cellDataType: "number",
+        headerComponent: TooltipHeader,
+        headerComponentParams: {
+          tooltipText:
+            "Rate after applying the bid discount; this is the rate used in bills",
+        },
       },
       {
         field: "is_cement_item",
         headerName: "Cement?",
         editable: true,
-        width: 90,
+        width: 100,
         cellDataType: "boolean",
+        headerComponent: TooltipHeader,
+        headerComponentParams: {
+          tooltipText:
+            "Mark if this item falls under the cement PVC bucket (affects which price index series is applied)",
+        },
       },
       {
         field: "steel_subtype",
         headerName: "Steel subtype",
         editable: true,
-        width: 150,
+        width: 160,
         cellEditor: "agSelectCellEditor",
         cellEditorParams: {
           values: ["—", "angles", "plates", "other_sections", "tmt"],
         },
         valueParser: (p) => (p.newValue === "—" ? null : p.newValue),
         valueFormatter: (p) => p.value ?? "—",
+        headerComponent: TooltipHeader,
+        headerComponentParams: {
+          tooltipText:
+            "Mark if this item falls under the steel PVC bucket; the subtype maps to a specific steel index series",
+        },
       },
     ],
     [],
@@ -142,34 +433,41 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
     setRows((prev) => [...prev, emptyRow()]);
   }
 
+  function appendImportedRows(imported: RowState[]) {
+    setRows((prev) => [...prev, ...imported]);
+  }
+
   async function saveAll() {
     setSaveError(null);
-    const dirty = rows
+    const work = rows
       .map((r, i) => ({ r, i }))
-      .filter(({ r }) => r._isNew || r._dirty);
-    if (dirty.length === 0) {
+      .filter(({ r }) => r._rowState === "new" || r._rowState === "dirty");
+    if (work.length === 0) {
       setSaveProgress("Nothing to save.");
       return;
     }
     let n = 0;
-    for (const { r, i } of dirty) {
+    // We update `rows` field-by-field at the end via a working copy so we
+    // don't re-render during the iteration and lose AG Grid edit state.
+    const next = [...rows];
+    for (const { r, i } of work) {
       n += 1;
-      setSaveProgress(`Saving ${n} of ${dirty.length}…`);
+      setSaveProgress(`Saving ${n} of ${work.length}…`);
       try {
-        await apiFetch(`/api/schedules/${scheduleId}/items`, {
-          method: "POST",
-          body: {
-            item_code: r.item_code,
-            description: r.description,
-            unit: r.unit,
-            original_qty: r.original_qty,
-            revised_qty: r.revised_qty,
-            base_rate: r.base_rate,
-            agreement_rate: r.agreement_rate,
-            is_cement_item: r.is_cement_item,
-            steel_subtype: r.steel_subtype,
-          },
-        });
+        if (r._rowState === "new") {
+          const created = await apiFetch<{ id: string }>(
+            `/api/schedules/${scheduleId}/items`,
+            { method: "POST", body: itemPayload(r) },
+          );
+          next[i] = { ...next[i], id: created.id, _rowState: "persisted" };
+        } else {
+          // dirty + must have an id (loaded from server)
+          await apiFetch(
+            `/api/schedules/${scheduleId}/items/${r.id}`,
+            { method: "PUT", body: itemPayload(r) },
+          );
+          next[i] = { ...next[i], _rowState: "persisted" };
+        }
       } catch (err) {
         const msg =
           err instanceof ApiError
@@ -177,22 +475,101 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
             : `Row ${i + 1}: save failed`;
         setSaveError(msg);
         setSaveProgress(null);
+        setRows(next);
         return;
       }
     }
-    setSaveProgress(`Saved ${dirty.length} row(s).`);
+    setRows(next);
+    setSaveProgress(`Saved ${work.length} row(s).`);
     queryClient.invalidateQueries({ queryKey: ["schedule-items", scheduleId] });
+  }
+
+  async function deleteSelected() {
+    const api = gridRef.current?.api;
+    if (!api) return;
+    const selectedNodes = api.getSelectedNodes();
+    if (selectedNodes.length === 0) return;
+
+    const persistedSelected = selectedNodes.filter(
+      (n) =>
+        n.data?._rowState === "persisted" || n.data?._rowState === "dirty",
+    );
+    const newOnlySelected = selectedNodes.filter(
+      (n) => n.data?._rowState === "new",
+    );
+
+    if (persistedSelected.length > 0) {
+      const ok = window.confirm(
+        `Delete ${persistedSelected.length + newOnlySelected.length} item(s)? This cannot be undone.`,
+      );
+      if (!ok) return;
+    }
+
+    setSaveError(null);
+    // Track which rows survive.
+    const toRemove = new Set<RowState>();
+    for (const n of newOnlySelected) {
+      if (n.data) toRemove.add(n.data);
+    }
+    for (const n of persistedSelected) {
+      if (!n.data?.id) continue;
+      try {
+        await apiFetch(
+          `/api/schedules/${scheduleId}/items/${n.data.id}`,
+          { method: "DELETE" },
+        );
+        toRemove.add(n.data);
+      } catch (err) {
+        const msg =
+          err instanceof ApiError
+            ? `Delete ${n.data.item_code || "<no code>"}: ${err.message}`
+            : `Delete failed for ${n.data.item_code || "<no code>"}`;
+        setSaveError(msg);
+        break;
+      }
+    }
+    setRows((prev) => prev.filter((r) => !toRemove.has(r)));
+    api.deselectAll();
+    setSelectedCount(0);
+    if (persistedSelected.length > 0) {
+      queryClient.invalidateQueries({
+        queryKey: ["schedule-items", scheduleId],
+      });
+    }
   }
 
   return (
     <div className="space-y-3">
       {cementSteelConflicts.length > 0 && (
         <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          {cementSteelConflicts.length} row(s) marked as both cement AND a steel
-          subtype. The engine treats these as mutually exclusive buckets —
-          clear one before saving.
+          One or more items are marked as both a cement item and a steel item.
+          Each item can only belong to one — please correct before saving.
         </div>
       )}
+
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="secondary" size="sm" onClick={addRow}>
+          + Add row
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => setImportOpen(true)}
+        >
+          Import rows
+        </Button>
+        {selectedCount > 0 && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={deleteSelected}
+          >
+            Delete selected ({selectedCount})
+          </Button>
+        )}
+      </div>
 
       <div style={{ height: 480, width: "100%" }}>
         <AgGridReact<RowState>
@@ -201,22 +578,31 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
           rowData={rows}
           columnDefs={columnDefs}
           defaultColDef={{ resizable: true, sortable: true }}
+          rowSelection="multiple"
+          suppressRowClickSelection
           singleClickEdit
           stopEditingWhenCellsLoseFocus
+          onSelectionChanged={(e: SelectionChangedEvent<RowState>) => {
+            setSelectedCount(e.api.getSelectedNodes().length);
+          }}
           onCellValueChanged={(e) => {
-            const updated = [...rows];
             const idx = e.rowIndex;
             if (idx === null) return;
-            updated[idx] = { ...updated[idx], _dirty: true };
-            setRows(updated);
+            setRows((prev) => {
+              const next = [...prev];
+              const cur = next[idx];
+              // A "new" row stays "new" — it has no server id yet. Only
+              // "persisted" rows are demoted to "dirty" on edit.
+              const tag: RowStateTag =
+                cur._rowState === "new" ? "new" : "dirty";
+              next[idx] = { ...cur, _rowState: tag };
+              return next;
+            });
           }}
         />
       </div>
 
       <div className="flex items-center gap-3">
-        <Button type="button" variant="secondary" size="sm" onClick={addRow}>
-          + Add row
-        </Button>
         <Button type="button" variant="primary" size="sm" onClick={saveAll}>
           Save all
         </Button>
@@ -227,6 +613,12 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
           <span className="text-[12px] text-red-600">{saveError}</span>
         )}
       </div>
+
+      <ImportRowsModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onAdd={appendImportedRows}
+      />
     </div>
   );
 }
