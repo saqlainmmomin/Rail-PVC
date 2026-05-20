@@ -37,6 +37,7 @@ Start with [STATUS.md](STATUS.md) for current blockers and branch state.
 - **Phase 3 backfill (P3-BF-1…P3-BF-4): merged to `main` via PR #4 (2026-05-18)**
 - **TEST-P3P4 (TEST-01…TEST-07): merged to `main` (2026-05-19) — M-1/M-2 closed, 55/55 backend tests, 99/99 engine tests**
 - **Phase 5 UI implementation (P5-001…P5-008): complete on `saqlain/phase-5` (2026-05-19) — 61/61 backend tests, `next build` clean. Awaiting commit + P5-REVIEW.**
+- **P5-REVIEW remediation (2026-05-20): C-1 + H-1/H-2/H-3 + M-1…M-6 + L-4 closed. 82/82 backend (clean venv on `fastapi==0.115.12`), 99/99 engine, 16/16 frontend vitest, `next build` clean. L-1/L-2/L-3 deferred to follow-up tasks below.**
 
 ## Current Workstreams
 
@@ -98,6 +99,15 @@ Status: **implementation complete (P5-001…P5-008 on 2026-05-19; P5-F1…F5 on 
 | P5-F3 | Items grid: proper CRUD (update + delete) | [CC-S] | complete | Backend: `PUT/DELETE /api/schedules/{id}/items/{item_id}` with two-step tenant gate (`_assert_item_under_schedule_for_tenant`) + 6 new tests; route count 29→31. Frontend: `_rowState: new/dirty/persisted`; Save All routes new→POST, dirty→PUT; checkbox column + "Delete selected (N)" with confirm for persisted rows |
 | P5-F4 | Items grid: fix mutual-exclusion warning copy | [CC-S] | complete | Banner rewritten to user-facing copy |
 | P5-F5 | Extra-items: explicit Save button (staged changes) | [CC-S] | complete | `pending` local map; toggles update state only; "Save changes (N)" runs `Promise.all` POSTs; amber dot per dirty row; on failure pending preserved; banner reads merged view |
+
+### P5-REVIEW deferred follow-ups (post-merge)
+
+| ID | Title | Owner | Status | Notes |
+|---|---|---|---|---|
+| P5-FUP-L1 | Partial-success state drift in `ExtraItemDecisionList.saveChanges` | [CC-S] | pending | REVIEW.md L-1. When some upserts succeed and the next rejects, `setPending` keeps the successful keys showing as unsaved. Accept criteria: on partial failure, drop the successfully-saved keys from `pending` and toast the failed-row count. Idempotent backend POST makes a follow-up retry safe. |
+| P5-FUP-L2 | Delete-selected confirm wording overclaims for mixed selection | [CC-SH] | pending | REVIEW.md L-2. "This cannot be undone" applies to persisted rows only, but the count shown is `persisted + new`. Accept criteria: confirm only counts persisted/dirty rows; new-only deletions skip the modal entirely. |
+| P5-FUP-L3 | Remove unreachable 409 → inline-error path on `agreement_number` | [CC-S] | pending | REVIEW.md L-3. No UNIQUE constraint on `agreement_number` in migration 002, but `OverviewTab.save.onError` and a smoke-test affordance pretend there is. Accept criteria: either add the UNIQUE migration + backend `ConflictProblem` raise, or remove the inline-409 affordance and the WORKPLAN risk-register reference. |
+| P5-FUP-LINT | Resolve pre-existing `react-hooks/set-state-in-effect` lint errors in `ItemsGrid.tsx` | [CC-S] | pending | Lines 116 (modal reset effect) and 278 (items-loaded effect). Pre-existing on `saqlain/phase-5` HEAD; surfaces under React 19 / Next 16 stricter lint. Accept criteria: replace effect-driven reset with a `key`/derivation pattern; lint passes clean. |
 
 ### SH-P5 — GET Bill Endpoints + Export Backend `[CC-SH]`
 

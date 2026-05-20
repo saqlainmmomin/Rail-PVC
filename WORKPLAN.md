@@ -1,7 +1,7 @@
 # WORKPLAN.md — Phase 5: Contract Setup UI
 
-**Last updated:** 2026-05-20 (P5-F1…F5 complete; awaiting P5-REVIEW)
-**Status snapshot:** Phase 5 UI on `saqlain/phase-5` (PR #6). Smoke passed; BUG-1 fixed; P5-F1…F5 implementation landed (67/67 backend tests, `next build` clean). Ready for `P5-REVIEW`.
+**Last updated:** 2026-05-20 (P5-REVIEW remediation complete)
+**Status snapshot:** Phase 5 UI on `saqlain/phase-5` (PR #6). Smoke passed; BUG-1 fixed; P5-F1…F5 implementation landed; **P5-REVIEW closed** with all CRITICAL/HIGH/MEDIUM + L-4 resolved, L-1/L-2/L-3 deferred. **82/82 backend tests** on declared dep floor (`fastapi==0.115.12`), **99/99 engine**, **16/16 frontend vitest**, `next build` clean. Awaiting human push + merge.
 
 ---
 
