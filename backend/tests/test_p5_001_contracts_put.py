@@ -111,6 +111,70 @@ def test_model_fields_set_excludes_unset_fields():
     assert "railway_zone" not in body.model_fields_set
 
 
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("tender_number", None),
+        ("contractor_name", None),
+        ("base_month", None),
+        ("gst_mode", None),
+        ("pvc_applicable", None),
+        ("overall_rebate", None),
+        ("railway_zone", None),
+    ],
+)
+async def test_put_rejects_null_for_not_null_columns(session, field, value):
+    """REVIEW.md H-2 — Pydantic's `Optional[T] = None` shape lets an explicit
+    `{"<col>": null}` reach the handler with the field in `model_fields_set`,
+    which built an `UPDATE … SET <col> = NULL` and crashed at Postgres with an
+    unstructured 500 on the NOT NULL violation. The handler must reject
+    explicit-null on these columns with a structured 422 instead."""
+    body = ContractUpdate(**{field: value})
+    assert field in body.model_fields_set  # confirm the failure shape
+    with pytest.raises(ValidationProblem) as exc:
+        await update_contract(
+            contract_id="c-own",
+            body=body,
+            user=_user("tenant-A"),
+            session=session,
+        )
+    assert exc.value.status_code == 422
+    assert exc.value.extra["field"] == field
+    assert exc.value.extra.get("code") == "field_not_nullable" or exc.value.code == "field_not_nullable"
+
+
+async def test_put_allows_explicit_null_for_nullable_columns(session):
+    """REVIEW.md M-4 — clearing a genuinely-nullable column with `null` must
+    actually clear it (not be a no-op). loa_number is NULL-able in the
+    migration; explicit null in the body must land as `SET loa_number = NULL`."""
+    # Seed the row with a value first (raw, not via the handler).
+    await session.execute(text(
+        "ALTER TABLE contracts ADD COLUMN loa_number TEXT"
+    ))
+    await session.execute(text(
+        "UPDATE contracts SET loa_number = 'LOA-123' WHERE id = 'c-own'"
+    ))
+
+    from sqlalchemy.exc import OperationalError
+    try:
+        await update_contract(
+            contract_id="c-own",
+            body=ContractUpdate(loa_number=None),
+            user=_user("tenant-A"),
+            session=session,
+        )
+    except OperationalError:
+        pass  # SELECT-back uses ::text casts; the UPDATE landed.
+
+    row = (
+        await session.execute(
+            text("SELECT loa_number FROM contracts WHERE id='c-own'")
+        )
+    ).first()
+    assert row is not None
+    assert row[0] is None  # actually cleared, not left as 'LOA-123'
+
+
 async def test_valid_update_writes_only_provided_fields(session):
     """End-to-end happy path on the writeable side of the handler: a partial
     update with only one field flips that column and leaves the rest alone."""

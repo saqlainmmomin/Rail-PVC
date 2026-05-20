@@ -43,6 +43,35 @@ class ValidationProblem(ApiProblem):
     code = "validation_error"
 
 
+class FieldNotNullableProblem(ValidationProblem):
+    """Caller sent an explicit `null` for a column declared NOT NULL in the
+    schema. We surface this as a structured 422 (`code=field_not_nullable`)
+    so clients can render an actionable inline error instead of receiving
+    the raw asyncpg/Postgres 500 that the constraint would otherwise raise."""
+
+    code = "field_not_nullable"
+
+    def __init__(self, field: str) -> None:
+        super().__init__(
+            f"Field '{field}' cannot be cleared (column is NOT NULL)",
+            field=field,
+        )
+
+
+class CementSteelConflictProblem(ValidationProblem):
+    """An item cannot belong to both the cement and steel W-derivation
+    buckets — they are mutually exclusive in the engine. Reject at the API
+    boundary so wrong PVC numbers can't be produced from valid-looking
+    inputs."""
+
+    code = "cement_steel_conflict"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "An item cannot be both a cement item and a steel item",
+        )
+
+
 class EngineValidationProblem(ApiProblem):
     """Engine returned validation_errors — surface them as a structured list."""
 

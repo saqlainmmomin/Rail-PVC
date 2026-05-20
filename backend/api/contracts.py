@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.auth import AuthUser, get_current_user
 from services.db import get_session
-from services.errors import NotFoundProblem, ValidationProblem
+from services.errors import (
+    FieldNotNullableProblem,
+    NotFoundProblem,
+    ValidationProblem,
+)
 from services.pvc_service import (
     assert_contract_belongs_to_tenant,
     create_contract_with_default_rule_set,
@@ -21,6 +25,19 @@ from services.pvc_service import (
 from services.zone_mapping import VALID_ZONES
 
 router = APIRouter(prefix="/api/contracts", tags=["contracts"])
+
+# Columns declared NOT NULL in migration 002 (contracts table). An explicit
+# `null` for any of these in a PUT body must be rejected at the API boundary
+# rather than crashing at Postgres. See REVIEW.md H-2.
+_CONTRACT_NOT_NULL_FIELDS = frozenset({
+    "tender_number",
+    "contractor_name",
+    "base_month",
+    "gst_mode",
+    "pvc_applicable",
+    "overall_rebate",
+    "railway_zone",
+})
 
 
 # Columns returned by GET /api/contracts/{id} and PUT /api/contracts/{id}.
@@ -179,6 +196,13 @@ async def update_contract(
             )
         ).mappings().first()
         return dict(row)  # type: ignore[arg-type]
+
+    # H-2: reject explicit-null on NOT NULL columns BEFORE the railway_zone
+    # check — that gate's "not in VALID_ZONES" would also fail for null but
+    # the error message would be misleading.
+    for f in fields:
+        if f in _CONTRACT_NOT_NULL_FIELDS and getattr(body, f) is None:
+            raise FieldNotNullableProblem(f)
 
     if "railway_zone" in fields and body.railway_zone not in VALID_ZONES:
         raise ValidationProblem(

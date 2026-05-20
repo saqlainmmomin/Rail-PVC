@@ -23,12 +23,14 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.contract_items import (
+    ContractItemCreate,
     ContractItemUpdate,
+    create_contract_item,
     delete_contract_item,
     update_contract_item,
 )
 from services.auth import AuthUser
-from services.errors import NotFoundProblem
+from services.errors import NotFoundProblem, ValidationProblem
 
 
 def _user(tenant: str = "tenant-A") -> AuthUser:
@@ -135,6 +137,100 @@ async def test_put_wrong_schedule_id_returns_404(session):
     assert exc.value.status_code == 404
 
 
+@pytest.mark.parametrize("field", ["item_code", "is_cement_item"])
+async def test_put_rejects_null_for_not_null_columns(session, field):
+    """REVIEW.md H-2 — item_code and is_cement_item are NOT NULL in the
+    migration. Explicit-null payloads must produce a structured 422 (with
+    `code=field_not_nullable`), not a raw 500 NOT NULL violation."""
+    body = ContractItemUpdate(**{field: None})
+    assert field in body.model_fields_set
+    with pytest.raises(ValidationProblem) as exc:
+        await update_contract_item(
+            schedule_id="s-own",
+            item_id="i-own",
+            body=body,
+            user=_user("tenant-A"),
+            session=session,
+        )
+    assert exc.value.status_code == 422
+    assert exc.value.extra["field"] == field
+    assert exc.value.code == "field_not_nullable"
+
+
+async def test_put_invalid_steel_subtype_returns_422(session):
+    """REVIEW.md M-6 #1 — handler has the gate, no test pins it."""
+    with pytest.raises(ValidationProblem) as exc:
+        await update_contract_item(
+            schedule_id="s-own",
+            item_id="i-own",
+            body=ContractItemUpdate(steel_subtype="REBAR"),
+            user=_user("tenant-A"),
+            session=session,
+        )
+    assert exc.value.status_code == 422
+    assert exc.value.extra["field"] == "steel_subtype"
+
+
+async def test_put_empty_body_is_noop(session):
+    """REVIEW.md M-6 #2 — empty payload hits the no-op branch. We can't
+    exercise the SELECT-back under aiosqlite (`::text` casts), but we can
+    confirm no UPDATE ran by reading back the row directly."""
+    from sqlalchemy.exc import OperationalError
+    try:
+        await update_contract_item(
+            schedule_id="s-own",
+            item_id="i-own",
+            body=ContractItemUpdate(),  # nothing set
+            user=_user("tenant-A"),
+            session=session,
+        )
+    except OperationalError:
+        pass  # SELECT-back uses ::text casts; no UPDATE was issued.
+
+    row = (
+        await session.execute(
+            text("SELECT description, item_code, agreement_rate FROM contract_items"
+                 " WHERE id='i-own'")
+        )
+    ).first()
+    assert row[0] == "desc"
+    assert row[1] == "A1"
+    assert row[2] == 95
+
+
+async def test_put_rejects_cement_steel_conflict(session):
+    """REVIEW.md M-3 — the engine treats cement and steel as mutually
+    exclusive W-derivation buckets. Backend must enforce the rule, not just
+    the frontend banner. PUT that ends up in both buckets → 422."""
+    with pytest.raises(ValidationProblem) as exc:
+        await update_contract_item(
+            schedule_id="s-own",
+            item_id="i-own",
+            body=ContractItemUpdate(is_cement_item=True, steel_subtype="tmt"),
+            user=_user("tenant-A"),
+            session=session,
+        )
+    assert exc.value.status_code == 422
+    assert exc.value.code == "cement_steel_conflict"
+
+
+async def test_post_rejects_cement_steel_conflict(session):
+    """Mirror of PUT-side M-3 enforcement on the create path."""
+    with pytest.raises(ValidationProblem) as exc:
+        await create_contract_item(
+            schedule_id="s-own",
+            body=ContractItemCreate(
+                item_code="C1",
+                is_cement_item=True,
+                steel_subtype="angles",
+            ),
+            user=_user("tenant-A"),
+            session=session,
+        )
+    assert exc.value.status_code == 422
+    assert exc.value.code == "cement_steel_conflict"
+
+
 async def test_put_wrong_tenant_returns_404(session):
     """tenant-A cannot touch tenant-B's item via tenant-B's schedule."""
     with pytest.raises(NotFoundProblem) as exc:
@@ -148,6 +244,34 @@ async def test_put_wrong_tenant_returns_404(session):
     assert exc.value.status_code == 404
     # The schedule gate fires first — message comes from that layer.
     assert exc.value.message == "Schedule not found"
+
+
+async def test_put_steel_subtype_with_other_fields(session):
+    """REVIEW.md M-6 #4 — exercises the SET-clause string-construction path
+    where the ENUM cast for steel_subtype coexists with regular `f = :f`
+    parameters. The set iteration is unordered (Python sets) — this pins
+    that BOTH the cast branch and the plain-binding branch land in the same
+    UPDATE. sqlite's CAST to a non-native type clobbers the steel_subtype
+    value to NUMERIC affinity, so we assert only what's portable: the plain
+    field is written and the UPDATE didn't raise."""
+    from sqlalchemy.exc import OperationalError
+    try:
+        await update_contract_item(
+            schedule_id="s-own",
+            item_id="i-own",
+            body=ContractItemUpdate(steel_subtype="tmt", description="steel-rod"),
+            user=_user("tenant-A"),
+            session=session,
+        )
+    except OperationalError:
+        pass  # SELECT-back ::text casts
+
+    row = (
+        await session.execute(
+            text("SELECT description FROM contract_items WHERE id='i-own'")
+        )
+    ).first()
+    assert row[0] == "steel-rod"
 
 
 # ---------- DELETE ----------
