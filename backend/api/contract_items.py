@@ -24,7 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.auth import AuthUser, get_current_user
 from services.db import get_session
-from services.errors import NotFoundProblem, ValidationProblem
+from services.errors import (
+    CementSteelConflictProblem,
+    FieldNotNullableProblem,
+    NotFoundProblem,
+    ValidationProblem,
+)
 from services.pvc_service import assert_schedule_belongs_to_tenant
 
 router = APIRouter(prefix="/api", tags=["contract_items"])
@@ -34,6 +39,10 @@ router = APIRouter(prefix="/api", tags=["contract_items"])
 # it marks the item as non-steel (cement, labour-driven items, etc.).
 # The engine maps each subtype to a JPC series (see KU-004 / KU-005).
 VALID_STEEL_SUBTYPES = frozenset({"angles", "plates", "other_sections", "tmt"})
+
+# Columns declared NOT NULL in migration 002 for contract_items. See
+# REVIEW.md H-2 for the rejection rule.
+_ITEM_NOT_NULL_FIELDS = frozenset({"item_code", "is_cement_item"})
 
 
 class ContractItemCreate(BaseModel):
@@ -79,6 +88,11 @@ async def create_contract_item(
             field="steel_subtype",
             value=body.steel_subtype,
         )
+    # REVIEW.md M-3 — engine treats cement and steel as mutually exclusive
+    # W-derivation buckets. An item flagged as both confuses bucket selection
+    # and produces a plausible-but-wrong PVC number. Block at the API.
+    if body.is_cement_item and body.steel_subtype is not None:
+        raise CementSteelConflictProblem()
 
     # P3-BF-2 trust boundary: contract_id derives from the schedule's parent,
     # NEVER from a client-supplied field. The helper also handles tenant
@@ -176,6 +190,40 @@ async def update_contract_item(
         )
 
     fields = body.model_fields_set
+    # REVIEW.md H-2 — reject explicit `null` for NOT NULL columns at the
+    # API boundary instead of letting it crash at Postgres as an
+    # unstructured 500.
+    for f in fields:
+        if f in _ITEM_NOT_NULL_FIELDS and getattr(body, f) is None:
+            raise FieldNotNullableProblem(f)
+
+    # REVIEW.md M-3 — apply the cement+steel conflict check to the *effective*
+    # row (current values + this patch). A PUT that only sets `steel_subtype`
+    # on a row already flagged as cement (or vice versa) must also be blocked.
+    if (
+        "is_cement_item" in fields
+        or "steel_subtype" in fields
+    ):
+        current = (
+            await session.execute(
+                text("SELECT is_cement_item, steel_subtype FROM contract_items WHERE id = :iid"),
+                {"iid": item_id},
+            )
+        ).first()
+        assert current is not None  # gate already verified existence
+        cement_eff = (
+            body.is_cement_item
+            if "is_cement_item" in fields
+            else bool(current[0])
+        )
+        subtype_eff = (
+            body.steel_subtype
+            if "steel_subtype" in fields
+            else current[1]
+        )
+        if cement_eff and subtype_eff is not None:
+            raise CementSteelConflictProblem()
+
     if not fields:
         # Nothing to update — return the current row.
         row = (
@@ -194,7 +242,7 @@ async def update_contract_item(
 
     # `steel_subtype` needs the explicit ENUM cast — same pattern as POST.
     set_parts: list[str] = []
-    params: dict[str, Any] = {"iid": item_id}
+    params: dict[str, Any] = {"iid": item_id, "sid": schedule_id}
     for f in fields:
         if f == "steel_subtype":
             set_parts.append("steel_subtype = CAST(:steel_subtype AS steel_subtype)")
@@ -202,8 +250,14 @@ async def update_contract_item(
             set_parts.append(f"{f} = :{f}")
         params[f] = getattr(body, f)
 
+    # REVIEW.md L-4 — defense in depth: re-scope the write to (id, schedule_id)
+    # so a concurrent re-parent between the gate and this UPDATE can only
+    # no-op, not modify the wrong row's context.
     await session.execute(
-        text(f"UPDATE contract_items SET {', '.join(set_parts)} WHERE id = :iid"),
+        text(
+            f"UPDATE contract_items SET {', '.join(set_parts)} "
+            f"WHERE id = :iid AND schedule_id = :sid"
+        ),
         params,
     )
 
@@ -236,13 +290,15 @@ async def delete_contract_item(
     item_id: str,
     user: AuthUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> None:
+):
+    # No `-> None` annotation: with PEP 563 it resolves to NoneType and trips the 204-no-body assertion on fastapi 0.115.x.
     await _assert_item_under_schedule_for_tenant(
         session, schedule_id, item_id, user.tenant_id
     )
+    # REVIEW.md L-4 — scope DELETE to (id, schedule_id), see UPDATE rationale.
     await session.execute(
-        text("DELETE FROM contract_items WHERE id = :iid"),
-        {"iid": item_id},
+        text("DELETE FROM contract_items WHERE id = :iid AND schedule_id = :sid"),
+        {"iid": item_id, "sid": schedule_id},
     )
 
 
