@@ -50,9 +50,9 @@ This file is the shortest path to current branch state, blockers, and next actio
 
 ## Current Priorities
 
-1. [Saqlain] Run WORKPLAN smoke table against merged `main` tomorrow; push `main` to origin if clean.
-2. [CC-S] Address `P5-FUP-L1/L2/L3` (deferred LOW findings) post-push.
-3. [CC-SH] Continue SH-P5 backend (G-1 → G-2 → G-3); request `SH-P5-REVIEW` before merge.
+1. [Saqlain] Run WORKPLAN smoke table against merged `main`; push `main` to origin if clean.
+2. [CC-S] `P5-FUP-L1` + `L3` cleared Session 20 (2026-05-21). `L-2` remains — owned by [CC-SH].
+3. [CC-SH] Continue SH-P5 backend (G-1 → G-2 → G-3); also pick up `P5-FUP-L2` (delete-confirm wording). Request `SH-P5-REVIEW` before merge.
 
 ## File Classification
 

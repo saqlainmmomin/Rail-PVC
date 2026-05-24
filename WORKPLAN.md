@@ -261,7 +261,7 @@ A user starts with an empty tenant and, by the end of Phase 5, can produce a con
 | Q3 | Form library | `react-hook-form` + `zod` | Already decided; zod mirrors Pydantic ContractCreate; `@hookform/resolvers/zod` bridges them |
 | Q4 | Railway zone picker | Typed dropdown, all 16 VALID_ZONES, no escape hatch | Wrong zone = wrong JPC city = wrong steel series; enum is exhaustive; new zones require a migration so the dropdown can be updated at the same time |
 | Q5 | Save-and-resume | Backend draft rows — `POST /api/contracts` creates `status='Draft'` immediately; user can return via contract list | Matches existing status enum; no localStorage second-source-of-truth |
-| Q6 | Validation split | Client validates dates + numerics; server owns uniqueness | Client catches date ordering + `bid_amount ≤ contract_value` instantly; `agreement_number` uniqueness can only be checked server-side; zod is already present so `.refine()` costs nothing |
+| Q6 | Validation split | Client validates dates + numerics; server owns cross-row constraints | Client catches date ordering + `bid_amount ≤ contract_value` instantly via zod `.refine()`. (Note: `agreement_number` is not UNIQUE in migration 002 — no server-side conflict check exists. P5-FUP-L3 removed the dead inline-409 affordance; add a UNIQUE migration + `ConflictProblem` raise if uniqueness becomes a product requirement.) |
 | Q7 | Extra-item decisions | Separate page `/contracts/[id]/extra-items`, linked from contract detail when ExtraNS schedule exists | Keeps the detail page tabs uncluttered; decisions are a distinct workflow, not part of setup navigation |
 | Q8 | Out-of-scope confirmation | All confirmed out of scope | See list above |
 

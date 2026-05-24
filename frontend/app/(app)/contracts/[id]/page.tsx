@@ -246,9 +246,6 @@ function OverviewTab({
   onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [serverFieldError, setServerFieldError] = useState<
-    { field: keyof ContractFormValues; message: string } | null
-  >(null);
 
   const save = useMutation({
     mutationFn: (values: ContractFormValues) =>
@@ -259,15 +256,6 @@ function OverviewTab({
     onSuccess: () => {
       onSaved();
       setEditing(false);
-      setServerFieldError(null);
-    },
-    onError: (err) => {
-      if (err instanceof ApiError && err.status === 409) {
-        setServerFieldError({
-          field: "agreement_number",
-          message: err.message || "Agreement number already in use",
-        });
-      }
     },
   });
 
@@ -278,12 +266,8 @@ function OverviewTab({
         onSubmit={async (values) => {
           await save.mutateAsync(values);
         }}
-        onCancel={() => {
-          setEditing(false);
-          setServerFieldError(null);
-        }}
+        onCancel={() => setEditing(false)}
         submitLabel="Save changes"
-        serverFieldError={serverFieldError}
       />
     );
   }

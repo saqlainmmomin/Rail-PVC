@@ -127,43 +127,58 @@ export function ExtraItemDecisionList({
   }
 
   async function saveChanges() {
-    // REVIEW.md M-5 — snapshot the keys we are saving NOW. A toggle that
-    // arrives while the request is in flight will add a key to `pending`;
-    // on success we must clear only the keys in `savedKeys`, not blow away
-    // the new toggle. Previously `setPending({})` ate that user action
-    // silently.
+    // REVIEW.md M-5 — snapshot the keys saved NOW so a mid-flight toggle
+    // isn't blown away on success.
+    // REVIEW.md L-1 — `Promise.allSettled`, not `Promise.all`. With `all`,
+    // the first rejection short-circuits the await but the other POSTs have
+    // already committed server-side. On the catch path `pending` stayed
+    // untouched, leaving the fulfilled rows showing as unsaved while the
+    // server held the new value. Now we drop only the fulfilled keys; failed
+    // keys stay in `pending` for the user to retry (POST is idempotent).
     const entries = Object.entries(pending);
     if (entries.length === 0) return;
-    const savedKeys = new Set(entries.map(([k]) => k));
     setSaving(true);
-    try {
-      await Promise.all(
-        entries.map(([item_id, v]) =>
-          apiFetch(`/api/contracts/${contractId}/extra-item-decisions`, {
-            method: "POST",
-            body: { item_id, eligible: eligibleFor(v) },
-            silent: true,
-          }),
-        ),
-      );
+    const results = await Promise.allSettled(
+      entries.map(([item_id, v]) =>
+        apiFetch(`/api/contracts/${contractId}/extra-item-decisions`, {
+          method: "POST",
+          body: { item_id, eligible: eligibleFor(v) },
+          silent: true,
+        }),
+      ),
+    );
+    const fulfilledKeys = new Set(
+      results
+        .map((r, i) => (r.status === "fulfilled" ? entries[i][0] : null))
+        .filter((k): k is string => k !== null),
+    );
+    const failures = results.filter((r) => r.status === "rejected");
+    if (fulfilledKeys.size > 0) {
       setPending((prev) =>
         Object.fromEntries(
-          Object.entries(prev).filter(([k]) => !savedKeys.has(k)),
+          Object.entries(prev).filter(([k]) => !fulfilledKeys.has(k)),
         ),
-      );
-      toast.success(
-        `Saved ${entries.length} decision${entries.length === 1 ? "" : "s"}`,
       );
       queryClient.invalidateQueries({
         queryKey: ["extra-item-decisions", contractId],
       });
-    } catch (err) {
-      const msg =
-        err instanceof ApiError ? err.message : "Failed to save decisions";
-      toast.error("Save failed", { description: msg });
-    } finally {
-      setSaving(false);
     }
+    if (failures.length === 0) {
+      toast.success(
+        `Saved ${fulfilledKeys.size} decision${fulfilledKeys.size === 1 ? "" : "s"}`,
+      );
+    } else {
+      const firstReason = (failures[0] as PromiseRejectedResult).reason;
+      const msg =
+        firstReason instanceof ApiError
+          ? firstReason.message
+          : "Failed to save decisions";
+      toast.error(
+        `${failures.length} of ${entries.length} failed to save`,
+        { description: msg },
+      );
+    }
+    setSaving(false);
   }
 
   return (

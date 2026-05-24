@@ -104,9 +104,9 @@ Status: **implementation complete (P5-001…P5-008 on 2026-05-19; P5-F1…F5 on 
 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
-| P5-FUP-L1 | Partial-success state drift in `ExtraItemDecisionList.saveChanges` | [CC-S] | pending | REVIEW.md L-1. When some upserts succeed and the next rejects, `setPending` keeps the successful keys showing as unsaved. Accept criteria: on partial failure, drop the successfully-saved keys from `pending` and toast the failed-row count. Idempotent backend POST makes a follow-up retry safe. |
+| P5-FUP-L1 | Partial-success state drift in `ExtraItemDecisionList.saveChanges` | [CC-S] | complete | Session 20 (2026-05-21). `Promise.all` → `Promise.allSettled`; drop fulfilled keys from `pending`; failed keys retained for retry (POST is idempotent). Toast copy: "N of M failed to save" on partial failure. |
 | P5-FUP-L2 | Delete-selected confirm wording overclaims for mixed selection | [CC-SH] | pending | REVIEW.md L-2. "This cannot be undone" applies to persisted rows only, but the count shown is `persisted + new`. Accept criteria: confirm only counts persisted/dirty rows; new-only deletions skip the modal entirely. |
-| P5-FUP-L3 | Remove unreachable 409 → inline-error path on `agreement_number` | [CC-S] | pending | REVIEW.md L-3. No UNIQUE constraint on `agreement_number` in migration 002, but `OverviewTab.save.onError` and a smoke-test affordance pretend there is. Accept criteria: either add the UNIQUE migration + backend `ConflictProblem` raise, or remove the inline-409 affordance and the WORKPLAN risk-register reference. |
+| P5-FUP-L3 | Remove unreachable 409 → inline-error path on `agreement_number` | [CC-S] | complete | Session 20 (2026-05-21). Removed `serverFieldError` prop + `useEffect` from `ContractForm.tsx`; removed try/catch + `useState` from `contracts/new/page.tsx`; removed `onError` 409 branch + state from `OverviewTab`. WORKPLAN Q6 updated to drop false "server owns uniqueness" claim. |
 
 ### SH-P5 — GET Bill Endpoints + Export Backend `[CC-SH]`
 

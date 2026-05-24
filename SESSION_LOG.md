@@ -24,6 +24,16 @@ Use it for current milestone decisions and recent sessions only.
 
 ## Recent Sessions
 
+### Session 20 — 2026-05-21 (P5-FUP-L3 + P5-FUP-L1 deferred LOWs)
+
+Started smoke prep on merged `main` and cleared two of the three deferred LOW findings while the dev servers were warm.
+
+- **P5-FUP-L3 — Unreachable 409 affordance on `agreement_number`.** Migration 002 never added a UNIQUE on `agreement_number`, so the backend can't raise a conflict, but the frontend was branching on `err.status === 409` in two places (create + edit) and the form carried a `serverFieldError` prop wired through a `useEffect` (the H-3 effect-pattern only existed because of this dead path). Removed the prop + effect + import in `ContractForm.tsx`; removed the `useState` and try/catch in `contracts/new/page.tsx` (`apiFetch` already toasts on error); removed the `onError` 409 branch and `serverFieldError` state in `OverviewTab` (`[id]/page.tsx`). Updated WORKPLAN Q6 to drop the false "server owns uniqueness" claim and note the path back if uniqueness ever becomes a product requirement. Net deletion. Lint + typecheck clean.
+
+- **P5-FUP-L1 — Partial-success state drift in `ExtraItemDecisionList.saveChanges`.** Root cause: `Promise.all` short-circuits on the first rejection, but the other POSTs have already committed server-side. The catch path left `pending` untouched, leaving fulfilled rows showing as unsaved while the server held the new value — the dirty indicator was lying. Switched to `Promise.allSettled`, dropped the fulfilled keys from `pending`, kept failed keys in `pending` for retry (POST is idempotent — already established in M-5's audit), and changed the toast copy on partial failure to "N of M failed to save". The M-5 mid-flight-toggle invariant is preserved because we still filter from `prev` rather than overwriting.
+
+- **Not done.** P5-FUP-L2 (delete-confirm wording for mixed selection) — still owned by [CC-SH]. Smoke pass also still pending — servers are up but Saqlain hasn't run the table yet.
+
 ### Session 19 — 2026-05-20 (P5-REVIEW remediation + merge to `main`)
 
 CC-S ran the adversarial review on `saqlain/phase-5` (Codex-S unavailable this cycle) and posted 14 findings to `REVIEW.md`. Then the same chat remediated all of them. Worked one finding at a time with TDD inside the loop — failing test first, fix, green — and audited each finding for the same class of bug elsewhere before patching the one line the review named.

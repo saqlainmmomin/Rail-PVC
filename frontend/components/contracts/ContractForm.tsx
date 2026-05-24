@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { z } from "zod";
@@ -23,8 +22,6 @@ type Props = {
   onSubmit: (values: ContractFormValues) => Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
-  /** Set per-field server errors (e.g. agreement_number 409 conflict). */
-  serverFieldError?: { field: keyof FormInput; message: string } | null;
 };
 
 const labelCls = "block text-[12px] font-medium text-slate-700 mb-1";
@@ -49,29 +46,15 @@ export function ContractForm({
   onSubmit,
   onCancel,
   submitLabel = "Create contract",
-  serverFieldError,
 }: Props) {
   const {
     register,
     handleSubmit,
-    setError,
     formState: { errors, isSubmitting },
   } = useForm<FormInput, unknown, ContractFormValues>({
     resolver: zodResolver(contractCreateSchema),
     defaultValues: defaultFormValues(defaultValues),
   });
-
-  // REVIEW.md H-3 — `setError` is a state mutation. Calling it in the render
-  // body queues a re-render on every render where `serverFieldError` is truthy,
-  // which then re-runs the render body and re-calls setError. React-hook-form's
-  // internal guard keeps this from looping today, but the contract that
-  // setState can't run during render is broken. Run the translation as an
-  // effect keyed on the (stable) serverFieldError identity.
-  useEffect(() => {
-    if (serverFieldError) {
-      setError(serverFieldError.field, { message: serverFieldError.message });
-    }
-  }, [serverFieldError, setError]);
 
   const submit: SubmitHandler<ContractFormValues> = async (values) => {
     await onSubmit(values);
