@@ -455,9 +455,13 @@ export function ItemsGrid({ scheduleId }: { scheduleId: string }) {
     );
 
     if (persistedSelected.length > 0) {
-      const ok = window.confirm(
-        `Delete ${persistedSelected.length + newOnlySelected.length} item(s)? This cannot be undone.`,
-      );
+      const savedCount = persistedSelected.length;
+      const unsavedCount = newOnlySelected.length;
+      const message =
+        unsavedCount > 0
+          ? `Delete ${savedCount} saved item(s)? ${unsavedCount} unsaved row(s) will also be discarded. This cannot be undone.`
+          : `Delete ${savedCount} saved item(s)? This cannot be undone.`;
+      const ok = window.confirm(message);
       if (!ok) return;
     }
 
