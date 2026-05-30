@@ -120,6 +120,11 @@ class AuthProblem(ApiProblem):
     code = "unauthenticated"
 
 
+class ForbiddenProblem(ApiProblem):
+    status_code = 403
+    code = "forbidden"
+
+
 class StorageProblem(ApiProblem):
     """503 Service Unavailable — used when the external storage backend
     (Supabase Storage) fails an upload/download. We surface 503 rather

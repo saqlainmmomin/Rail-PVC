@@ -27,7 +27,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db import get_session
-from .errors import AuthProblem
+from .errors import AuthProblem, ForbiddenProblem
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,7 @@ class AuthUser:
     auth_id: str          # Supabase auth.users.id
     email: str | None
     display_name: str | None  # email or claim — used as approved_by
+    is_admin: bool = False
 
 
 @lru_cache(maxsize=1)
@@ -84,7 +85,8 @@ async def get_current_user(
     row = (
         await session.execute(
             text("""
-                SELECT id::text AS id, tenant_id::text AS tenant_id, email
+                SELECT id::text AS id, tenant_id::text AS tenant_id,
+                       email, is_admin
                 FROM users
                 WHERE supabase_auth_id = :auth_id
             """),
@@ -101,4 +103,16 @@ async def get_current_user(
         auth_id=auth_id,
         email=row["email"] or email,
         display_name=row["email"] or email or auth_id,
+        is_admin=bool(row["is_admin"]),
     )
+
+
+async def require_admin(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    """Dependency that restricts a route to admin users only.
+
+    Raises ForbiddenProblem (403) for any authenticated non-admin user so the
+    caller cannot distinguish "no such endpoint" from "you lack permission".
+    """
+    if not user.is_admin:
+        raise ForbiddenProblem("Admin access required")
+    return user
