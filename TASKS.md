@@ -105,7 +105,7 @@ Status: **implementation complete (P5-001…P5-008 on 2026-05-19; P5-F1…F5 on 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
 | P5-FUP-L1 | Partial-success state drift in `ExtraItemDecisionList.saveChanges` | [CC-S] | complete | Session 20 (2026-05-21). `Promise.all` → `Promise.allSettled`; drop fulfilled keys from `pending`; failed keys retained for retry (POST is idempotent). Toast copy: "N of M failed to save" on partial failure. |
-| P5-FUP-L2 | Delete-selected confirm wording overclaims for mixed selection | [CC-SH] | pending | REVIEW.md L-2. "This cannot be undone" applies to persisted rows only, but the count shown is `persisted + new`. Accept criteria: confirm only counts persisted/dirty rows; new-only deletions skip the modal entirely. |
+| P5-FUP-L2 | Delete-selected confirm wording overclaims for mixed selection | [CC-SH] | complete | Merged via PR #9 (2026-05-30). Saved vs unsaved counts now separate; new-only skips modal. |
 | P5-FUP-L3 | Remove unreachable 409 → inline-error path on `agreement_number` | [CC-S] | complete | Session 20 (2026-05-21). Removed `serverFieldError` prop + `useEffect` from `ContractForm.tsx`; removed try/catch + `useState` from `contracts/new/page.tsx`; removed `onError` 409 branch + state from `OverviewTab`. WORKPLAN Q6 updated to drop false "server owns uniqueness" claim. |
 
 ### SH-P5 — GET Bill Endpoints + Export Backend `[CC-SH]`
@@ -116,13 +116,13 @@ Missing backend routes that Phase 6 UI needs:
 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
-| SH-P5-1 | `GET /api/contracts/{id}/bills` | [CC-SH] | pending | List bills for a contract; tenant-checked; add to `bills.py` |
-| SH-P5-2 | `GET /api/bills/{id}` | [CC-SH] | pending | Bill detail; tenant-checked via bill→contract |
-| SH-P5-3 | `GET /api/bills/{id}/lines` | [CC-SH] | pending | List bill lines; add to `bills.py` |
-| SH-P5-4 | `GET /api/bills/{id}/recoveries` | [CC-SH] | pending | List recoveries; add to `bills.py` |
-| SH-P5-5 | `GET /api/pvc-runs/{id}/export/excel` | [CC-SH] | pending | Calls engine export; returns `.xlsx` download; see `engine/` export module |
-| SH-P5-6 | `GET /api/pvc-runs/{id}/export/pdf` | [CC-SH] | pending | HTML→PDF via WeasyPrint; `GET /api/pvc-runs/{id}/export/pdf` |
-| SH-P5-7 | Tests for SH-P5-1…4 | [CC-SH] | pending | Follow TEST-01 pattern: valid list, wrong-tenant → 404 |
+| SH-P5-1 | `GET /api/contracts/{id}/bills` | [CC-SH] | complete | Merged via PR #7 (2026-05-30) |
+| SH-P5-2 | `GET /api/bills/{id}` | [CC-SH] | complete | Merged via PR #7 (2026-05-30) |
+| SH-P5-3 | `GET /api/bills/{id}/lines` | [CC-SH] | complete | Merged via PR #7 (2026-05-30) |
+| SH-P5-4 | `GET /api/bills/{id}/recoveries` | [CC-SH] | complete | Merged via PR #7 (2026-05-30) |
+| SH-P5-5 | `GET /api/pvc-runs/{id}/export/excel` | [CC-SH] | pending | G-3; calls engine export; returns `.xlsx` download; check `engine/engine/` first |
+| SH-P5-6 | `GET /api/pvc-runs/{id}/export/pdf` | [CC-SH] | pending | G-3; HTML→PDF via WeasyPrint |
+| SH-P5-7 | Tests for SH-P5-1…4 | [CC-SH] | complete | 12 tests in `test_sh_p5_bills_get.py`; merged PR #7 |
 
 **Acceptance criteria for SH-P5-1…4:** same tenant-check pattern as existing POST routes; empty list (not 404) for zero rows.
 
@@ -138,11 +138,11 @@ Gap surface:
 
 | ID | Title | Owner | Status | Notes |
 |---|---|---|---|---|
-| IDX-1 | Source RBI WPI All-Commodities + series values for Apr-2022 → Nov-2024 | unassigned | pending | `seeds/seed_indices.py` docstring flags this period as "RBI not available for this period — must be sourced separately". Data sourcing task, not code |
-| IDX-2 | Backend: `POST /api/indices/{series}/months` for manual monthly entry | unassigned | pending | Per `PRODUCT.md`: "Index master with seeded historical RBI/JPC values (2022–present) + manual monthly entry for new months". No route exists yet |
-| IDX-3 | Backend: `GET /api/indices` + `GET /api/indices/{series}` for list/detail | unassigned | pending | Needed before IDX-4 can show data |
-| IDX-4 | Frontend: replace `/indices` page stub with series list + monthly entry form | unassigned | pending | Currently just an `EmptyState` at `frontend/app/(app)/indices/page.tsx:17`; copy promises "Once API is live, this page will list series and let you add the current month" |
-| IDX-5 | Retroactive index revision alerting (Phase 2 deferred per `PRODUCT.md`) | unassigned | pending | When a published index value is revised after a bill has used it, surface the affected runs |
+| IDX-1 | Source RBI WPI All-Commodities + series values for Apr-2022 → Nov-2024 | unassigned | pending | Data sourcing task, not code. Lower urgency — seed Dec-2024→Dec-2025 covers forward work |
+| IDX-2 | Backend: `POST /api/indices/{series}/months` + `GET /api/indices` + `GET /api/indices/{series}` | [CC-S] | complete | Migration 013 (`users.is_admin`); `require_admin` dep; 3 new routes; 10 tests; route count 35→38. 2026-05-30 |
+| IDX-3 | Backend read endpoints (list + detail) | [CC-S] | complete | Merged with IDX-2 (2026-05-30) |
+| IDX-4 | Frontend: replace `/indices` page stub with series list + monthly entry form | [CC-SH] | pending | Backend now live. Stub at `frontend/app/(app)/indices/page.tsx:17` |
+| IDX-5 | Retroactive index revision alerting (Phase 2 deferred per `PRODUCT.md`) | unassigned | pending | Post-MVP |
 
 **Why this is flagged now:** the Index Manager is a v1 product requirement (`PRODUCT.md`) but has no task ID anywhere in the workplan. Phase 7 (PVC Run UI) will exercise these series, and Phase 8 (Export UI) bills will reference them — without monthly entry, the system can't ingest new months as they're published.
 
@@ -152,7 +152,7 @@ Gap surface:
 
 | Phase | Owner | Dependency |
 |---|---|---|
-| Phase 6 — Bill entry UI (C-1…C-3) | [CC-S] | B-2 stable + SH-P5-1…4 merged |
+| Phase 6 — Bill entry UI (C-1…C-3) | [CC-S] | **UNBLOCKED** — SH-P5-1…4 merged (PR #7) + IDX-2..3 done (2026-05-30) |
 | Phase 7 — PVC run + results UI (D-1…D-4) | [CC-S] | C-3 stable |
 | Phase 8 — Export UI (E-1, E-2) | [CC-S] | D-4 + SH-P5-5…6 merged |
 | Phase 9 — E2E + integration (F-1…F-3) | [CC-S]+[CC-SH] | Phase 8 stable |

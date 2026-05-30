@@ -13,16 +13,39 @@ Use it for current milestone decisions and recent sessions only.
 
 ## Current Project State
 
-- Phases 0–4 + Phase 3 backfill + TEST-P3P4: all complete on `main` as of 2026-05-19.
-- **Phase 5 UI complete and merged to `main` 2026-05-20 (P5-001…P5-008 + P5-F1…F5 + P5-REVIEW remediation).**
-- Active (parallel): GET bill endpoints + export backend (Shubham, `shubham/phase-5-backend`).
-- Test suite on `main`: **82/82 backend** (clean venv, `fastapi==0.115.12`), 99/99 engine, 16/16 frontend vitest, `next build` + `npm run lint` clean. No open CRITICAL/HIGH findings.
+- Phases 0–5 + all P5-FUP findings + SH-P5-1..4 + IDX-2..3 all on `main` (2026-05-30).
+- **Phase 6 (Bill entry UI) is fully unblocked.** Next: [CC-S] implements C-1…C-3.
+- **Shubham's next task:** G-3 export endpoints (SH-P5-5..6), then IDX-4 (index UI stub).
+- Test suite on `main`: **103/103 backend** (91 prior + 12 SH-P5 + 10 IDX tests), 99/99 engine, 16/16 frontend vitest, `next build` + `npm run lint` clean. Route count 38.
+- DB migrations at head (013 — `users.is_admin`). Run `013_admin_flag.py` on Supabase before entering new index months.
 - Local backend: `cd backend && source .venv/bin/activate && uvicorn main:app --reload --port 8000`
 - Local frontend: `cd frontend && npm run build && npm start` (port 3000) — always rebuild after code changes
-- DB: Supabase at `ivselmhloegjmqrjekcy.supabase.co`, migrations at head (012).
+- DB: Supabase at `ivselmhloegjmqrjekcy.supabase.co`.
 - Tenant provisioned for `saqlainmmomin@gmail.com` — tenant_id `bd589426-93ba-4847-b5f3-1f69b020b4c0`.
 
 ## Recent Sessions
+
+### Session 21 — 2026-05-30 (PR catch-up + IDX-2..3)
+
+Returned after a gap. Reviewed and merged all three open PRs, then implemented IDX-2..3.
+
+- **PR #9 (P5-FUP-L2, `shubham/p5-fup-l2`)** — Merged clean. `ItemsGrid.deleteSelected` now shows separate saved vs unsaved counts; new-only selections skip the confirm modal entirely. 1 file, no logic change.
+
+- **PR #7 (SH-P5-1..4, `shubham/phase-5-backend`)** — Full adversarial review (SH-P5-REVIEW). Tenant isolation correct (`assert_contract_belongs_to_tenant` / `assert_bill_belongs_to_tenant`); empty-list contract correct; 12 tests following the boundary-mock pattern; route count 31→35 pinned. No findings. Merged.
+
+- **PR #8 (IDX docs, `shubham/idx-flag`)** — Docs-only gap flag for WPI/JPC Index Manager. Caught sequencing error in PR: it claimed IDX-2..3 block Phase 7, but seed data ends Dec-2025 and we're already May 2026 → **IDX-2..3 actually block Phase 6**. Corrected TASKS.md in a commit before merging.
+
+- **IDX-2..3 (CC-S, 2026-05-30)** — Implemented the index write backend:
+  - Migration 013: `users.is_admin BOOLEAN NOT NULL DEFAULT FALSE`
+  - `ForbiddenProblem` (403) added to `services/errors.py`
+  - `require_admin` dependency in `services/auth.py` (403 for any non-admin user)
+  - `GET /api/indices` — list all series
+  - `GET /api/indices/{series_name}` — series + full observation history
+  - `POST /api/indices/{series_name}/months` (admin-only) — insert month; 422 if day≠1; 409 on UNIQUE violation; 404 if series unknown
+  - P3-03 regression still passes (new POST is at a different path than the banned `/api/index-observations`)
+  - 10 new tests; full suite 91→103/103
+
+**Phase 6 is now fully unblocked.** All blocking tasks (SH-P5-1..4, IDX-2..3) are on `main`. Run migration 013 on Supabase and seed Jan–May 2026 index months before the first bill entry.
 
 ### Session 20 — 2026-05-21 (P5-FUP-L3 + P5-FUP-L1 deferred LOWs)
 

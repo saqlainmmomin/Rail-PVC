@@ -1,7 +1,7 @@
-# WORKPLAN.md — Phase 5: Contract Setup UI
+# WORKPLAN.md — RailPVC Implementation Plan
 
-**Last updated:** 2026-05-20 (P5-REVIEW remediation complete)
-**Status snapshot:** Phase 5 UI on `saqlain/phase-5` (PR #6). Smoke passed; BUG-1 fixed; P5-F1…F5 implementation landed; **P5-REVIEW closed** with all CRITICAL/HIGH/MEDIUM + L-4 resolved, L-1/L-2/L-3 deferred. **82/82 backend tests** on declared dep floor (`fastapi==0.115.12`), **99/99 engine**, **16/16 frontend vitest**, `next build` clean. Awaiting human push + merge.
+**Last updated:** 2026-05-30 (Session 21 — PR catch-up + IDX-2..3)
+**Status snapshot:** Phases 0–5 + SH-P5 G-1/G-2 + all P5-FUP findings + IDX-2..3 all on `main`. **Phase 6 (bill entry UI) is fully unblocked.** Suite: **103/103 backend**, 99/99 engine, 16/16 frontend vitest, `next build` clean. Route count 38. Migration head: 013.
 
 ---
 
@@ -26,12 +26,17 @@
 
 ## Next Steps (in order)
 
-1. **Implement P5-F1…F5** — use the implementation prompt below in a fresh CC chat.
-2. **Kick off `P5-REVIEW`** — Codex-S adversarial pass once P5-F1…F5 are committed; record findings in `REVIEW.md`.
-3. **Resolve any CRITICAL/HIGH findings** from review; iterate until clean.
-4. **Merge `saqlain/phase-5`** to `main` once review is clean.
-5. **Delete merged branches**: `saqlain/phase-5`, `saqlain/test-p3p4`.
-6. **Phase 6 kickoff** once Phase 5 merge + SH-P5 G-1/G-2 are on `main` — bill entry UI (C-1…C-3).
+### Saqlain [CC-S]
+1. **Run migration 013** on Supabase (`ALTER TABLE users ADD COLUMN is_admin ...`).
+2. **Seed Jan–May 2026 index months** via `POST /api/indices/{series}/months` with your admin user (set `is_admin = TRUE` in DB first).
+3. **Phase 6 — Bill entry UI (C-1…C-3)** — see Phase 6 section below.
+
+### Shubham [CC-SH]
+1. **G-3 — Export endpoints** — check `engine/engine/` for existing export logic first; wire `GET /api/pvc-runs/{id}/export/excel` + `.../export/pdf`. Request `SH-P5-REVIEW` before merge.
+2. **IDX-4 — Index Manager UI** — replace `/indices` stub with series list + monthly entry form. Backend is live (IDX-2..3 on `main`).
+
+### Both
+- No open CRITICAL/HIGH findings. No merge gates active.
 
 ---
 
@@ -607,35 +612,17 @@ frontend/app/(app)/
 
 ## Track G — SH-P5: GET Bill Endpoints + Export Backend `[SH]`
 
-> Parallel to Phase 5 UI. Branch: `shubham/phase-5-backend`. Touches `backend/api/` only.
+> Branch: `shubham/phase-5-backend` (merged PR #7 for G-1/G-2 on 2026-05-30). G-3 pending.
 
-### G-1: GET Bill List + Detail
+### G-1: GET Bill List + Detail — ✅ COMPLETE (PR #7, 2026-05-30)
 
-**Goal:** Expose read endpoints for bills so Phase 6 UI can list and view them.
-
-**Deliverables:**
-- `GET /api/contracts/{contract_id}/bills` — list bills; returns `list[BillOut]`; tenant-checked via contract
-- `GET /api/bills/{bill_id}` — single bill; `BillOut`; tenant-checked via bill→contract
-- Add to `backend/api/bills.py`
-- `BillOut`: `{ id, contract_id, bill_number, bill_date, measurement_date, gross_amount, net_amount, status, created_at }`
-
-**Acceptance criteria:**
-- Empty list (not 404) when no bills exist for a contract
-- Wrong-tenant contract → `NotFoundProblem(404)` (not 403 — don't leak existence)
-- Tests: valid list, zero-row list, wrong-tenant → 404
+`GET /api/contracts/{contract_id}/bills` + `GET /api/bills/{bill_id}` in `backend/api/bills.py`. Tenant-gated via `assert_contract_belongs_to_tenant` / `assert_bill_belongs_to_tenant`. Empty list (not 404) for zero rows. SH-P5-REVIEW passed (CC-S, 2026-05-30). Route count 31→35.
 
 ---
 
-### G-2: GET Bill Lines + Recoveries
+### G-2: GET Bill Lines + Recoveries — ✅ COMPLETE (PR #7, 2026-05-30)
 
-**Deliverables:**
-- `GET /api/bills/{bill_id}/lines` → `list[BillLineOut]`; tenant-checked via line→bill→contract
-- `GET /api/bills/{bill_id}/recoveries` → `list[RecoveryOut]`; tenant-checked
-- Add to `backend/api/bills.py`
-
-**Acceptance criteria:** Same isolation rules as G-1; wrong-tenant test per route.
-
-**Dependency:** G-1
+`GET /api/bills/{bill_id}/lines` + `GET /api/bills/{bill_id}/recoveries`. Same tenant pattern as G-1. 12 tests in `test_sh_p5_bills_get.py`.
 
 ---
 
@@ -660,25 +647,78 @@ frontend/app/(app)/
 ## Parallel Track Summary
 
 ```
-Right now (parallel):
-  saqlain/phase-5         P5-001 → P5-002 → P5-003 → P5-004 → P5-005 → P5-006 → P5-007 → P5-008
-  shubham/phase-5-backend G-1 → G-2 → G-3
+As of 2026-05-30:
+  main                    Phases 0–5 + SH-P5 G-1/G-2 + IDX-2..3 all merged
+  saqlain (next)          Phase 6 C-1 → C-2 → C-3
+  shubham (next)          G-3 (export), then IDX-4 (index UI)
 
-P5 task order (strict):
-  P5-001 and P5-002 can run in parallel (different codebases)
-  P5-003 depends on P5-002
-  P5-004 depends on P5-003 (redirect target must exist)
-  P5-005 depends on P5-001 + P5-004
-  P5-006 depends on P5-004
-  P5-007 depends on P5-002 + P5-006
-  P5-008 depends on P5-006
-
-Phase 6 unblocked when: B-2 stable + G-1+G-2 merged
-Phase 7 unblocked when: Phase 6 complete
+Phase 6 unblocked: ✅ (SH-P5 G-1/G-2 merged + IDX-2..3 done 2026-05-30)
+Phase 7 unblocked when: Phase 6 (C-3) complete
+Phase 8 unblocked when: Phase 7 + G-3 merged
 ```
 
 ---
 
-## Next Review Checkpoint
+## Next Review Checkpoints
 
-`P5-REVIEW` — Codex-S adversarial pass. **Implementation is on `saqlain/phase-5` (uncommitted at the time of this note); the next concrete actions are listed in "Next Steps" at the top of this file.**
+- `SH-P5-REVIEW` (G-3) — CC-S adversarial pass on Shubham's export endpoints before merge
+- `P6-REVIEW` — adversarial pass after Phase 6 bill entry UI lands
+- `P8-REVIEW` — export format parity review (Excel column order vs submission format)
+
+---
+
+## Phase 6 — Bill Entry UI `[CC-S]`
+
+**Dependency:** SH-P5 G-1/G-2 merged ✅ + IDX-2..3 on `main` ✅ → **fully unblocked**
+
+**Goal:** A Billing Engineer opens a contract, creates a running bill (header metadata), enters the line items and recoveries, and the bill is stored ready for a Phase 7 PVC run.
+
+### Goals
+
+By end of Phase 6, a user can:
+- Navigate to `/contracts/[id]/bills` and see a list of bills for the contract
+- Create a new bill with: `bill_number`, `bill_date`, `measurement_date`, `gross_amount`
+- View a bill's detail page with its `bill_lines` (from the schedule items) and `recoveries`
+- Add/edit recoveries manually (`recovery_type`, `amount`, `affects_pvc_base`)
+- Bill `status` starts as `Draft`; no status transitions in Phase 6 (Phase 7 owns the run flow)
+
+### Out of Scope for Phase 6
+
+- Bill lines are engine-generated on PVC run — Phase 6 only *views* them (they may be empty at bill creation)
+- Status transitions (Draft → Calculated → Approved) — Phase 7
+- Bill deletion — post-MVP
+
+### Route Map
+
+| Route | Backend status | Frontend task |
+|---|---|---|
+| `GET /api/contracts/{id}/bills` | ✅ SH-P5-1 (PR #7) | C-1: list view |
+| `GET /api/bills/{id}` | ✅ SH-P5-2 (PR #7) | C-2: detail view |
+| `GET /api/bills/{id}/lines` | ✅ SH-P5-3 (PR #7) | C-2: lines table |
+| `GET /api/bills/{id}/recoveries` | ✅ SH-P5-4 (PR #7) | C-2: recoveries table |
+| `POST /api/contracts/{id}/bills` | ❌ needs implementation | C-1: create form |
+| `POST /api/bills/{id}/recoveries` | ✅ P3-BF-3 | C-2: add recovery |
+
+### Task Breakdown
+
+#### C-1 — Bill list + create (`/contracts/[id]/bills`)
+
+**Backend:** `POST /api/contracts/{id}/bills` — body: `{ bill_number, bill_date, measurement_date, gross_amount }`. Tenant-gate via contract. Returns created bill. Add to `backend/api/bills.py`. Tests: valid create, wrong-tenant → 404, duplicate bill_number → 409.
+
+**Frontend:** Bills tab on `/contracts/[id]` page (new tab alongside Overview/Schedules/Items). TanStack Query for list. "New bill" button → inline form or modal → POST → redirect to bill detail.
+
+#### C-2 — Bill detail (`/contracts/[id]/bills/[billId]`)
+
+**Frontend only** (all backend routes exist). Show:
+- Bill header (number, dates, gross/net amount, status badge)
+- Bill lines table (AG Grid, read-only — populated after a PVC run)
+- Recoveries table with "Add recovery" button (type select + amount + affects_pvc_base toggle)
+
+#### C-3 — Bill edit + recovery management
+
+**Frontend:** Inline edit for bill header fields (same PUT pattern as Overview tab). Recovery add/delete. Bill `net_amount` is computed: `gross_amount − sum(recovery amounts where affects_pvc_base=FALSE)` — display only, not user-editable.
+
+### Open Questions
+
+- Does `bill_number` need to be unique per contract, or per tenant? (Currently no UNIQUE constraint — add in same diff as C-1 backend if per-contract uniqueness is product requirement.)
+- Should the bills tab be a tab on `/contracts/[id]` or a separate `/contracts/[id]/bills` page? (Recommend: separate page to avoid tab overload — contract detail already has Overview/Schedules/Items/ExtraNS.)
