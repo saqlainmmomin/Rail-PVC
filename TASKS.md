@@ -144,9 +144,9 @@ Gap surface:
 | IDX-4 | Frontend: replace `/indices` page stub with series list + monthly entry form | unassigned | pending | Currently just an `EmptyState` at `frontend/app/(app)/indices/page.tsx:17`; copy promises "Once API is live, this page will list series and let you add the current month" |
 | IDX-5 | Retroactive index revision alerting (Phase 2 deferred per `PRODUCT.md`) | unassigned | pending | When a published index value is revised after a bill has used it, surface the affected runs |
 
-**Why this is flagged now:** the Index Manager is a v1 product requirement (`PRODUCT.md`) but has no task ID anywhere in the workplan. Phase 7 (PVC Run UI) will exercise these series, and Phase 8 (Export UI) bills will reference them — without monthly entry, the system can't ingest new months as they're published.
+**Why this is flagged now:** the Index Manager is a v1 product requirement (`PRODUCT.md`) but has no task ID anywhere in the workplan. The seed data ends Dec-2025 (BCT workbook). As of 2026-05, RBI/JPC data for Jan-2026 onward does not exist in the DB — any PVC run on a bill dated Jan 2026 or later will produce wrong results. IDX-2..3 therefore block meaningful bill entry in **Phase 6**, not just Phase 7. IDX-1 (historical RBI sourcing for Apr-2022 → Nov-2024) is a separate data task, lower urgency for forward work.
 
-**Out of scope here:** docs-only flag — no code, no engine/migration changes. This row exists to make the gap visible so CC-S can scope and assign before Phase 7 begins.
+**Out of scope here:** docs-only flag — no code, no engine/migration changes. This row exists to make the gap visible so CC-S can scope and assign IDX-2..3 before Phase 6 begins.
 
 ### Phases 6–9 — Forward Plan
 
