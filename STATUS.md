@@ -6,28 +6,30 @@ This file is the shortest path to current branch state, blockers, and next actio
 
 ## Current Phase
 
-- **Phase 5 merged to `main` (2026-05-20).** P5-001…P5-008 + P5-F1…F5 + P5-REVIEW remediation all on `main`. **82/82 backend** on declared dep floor (`fastapi==0.115.12`), **99/99 engine**, **16/16 frontend vitest**, `next build` clean, `npm run lint` clean (0/0). Local merge only — not pushed.
-- **Active workstream (Saqlain):** WORKPLAN smoke verification on the merged `main` tomorrow, then push to origin.
-- **Active workstream (Shubham):** SH-P5 — GET bill endpoints + export backend (parallel to Phase 5 UI).
+- **Phase 5 + SH-P5-1..4 + P5-FUP all merged to `main` (2026-05-30).** PRs #7 (GET bills endpoints), #8 (IDX gap docs), #9 (P5-FUP-L2 delete wording) merged. Route count now 35. All P5-REVIEW deferred findings closed.
+- **Active workstream (Saqlain):** Phase 6 — Bill entry UI (C-1…C-3). **Blocked on IDX-2..3** (monthly entry endpoints) — seed data ends Dec-2025; bills dated Jan 2026+ have no index data. IDX-2..3 should be implemented before or alongside Phase 6.
+- **Active workstream (Shubham):** SH-P5-5..6 — Excel/PDF export endpoints (pending).
 - TEST-P3P4 complete: TEST-01…07 all merged to `main` (fast-forwarded from `saqlain/test-p3p4`, 2026-05-19).
 - Phase 3 backfill + Phase 4 complete: all on `main`.
 
 ## Current Blockers
 
-- None blocking. No open CRITICAL/HIGH findings.
+- **IDX-2..3** (monthly index entry endpoints): seed data ends Dec-2025; any PVC run on a Jan 2026+ bill will have no RBI/JPC data. Must be implemented before Phase 6 bill entry is meaningful.
 - Out-of-band: credential hygiene — DB password and JWT secret are in `backend/.env` (git-ignored). Keep `.env` out of version control.
 
 ## Active Review Cycle
 
-- **None open.** `P5-REVIEW` closed and merged 2026-05-20 (see [REVIEW.md](REVIEW.md) for the closure pointer + commit chain; per-finding CC Responses preserved in commit `259d0cb`).
-- Suite state on `main`: **82/82 backend tests** on declared dep floor `fastapi==0.115.12` (67 prior + 15 new regression pins), **99/99 engine tests**, **16/16 frontend vitest**, `next build` clean, `npm run lint` clean. Route count 31.
+- **None open.** `P5-REVIEW` closed and merged 2026-05-20; all deferred L-findings closed by 2026-05-30 (PR #9). SH-P5-REVIEW completed (PR #7 merged clean).
+- Suite state on `main`: backend tests include 12 new SH-P5 tests (route count 35); **99/99 engine tests**, **16/16 frontend vitest**, `next build` clean, `npm run lint` clean.
 
 ## Branch State
 
-- `main` — Phase 5 + P5-REVIEW remediation merged via fast-forward 2026-05-20. **Not yet pushed to origin** (awaiting Saqlain's smoke pass + manual push).
-- `saqlain/phase-5` — fully merged into `main`. Deletable after origin push.
-- `shubham/phase-5-backend` — Shubham's parallel track (GET bills + exports), in progress.
-- Deletable: `saqlain/test-p3p4` (already merged).
+- `main` — fully up to date with origin. PRs #7, #8, #9 merged 2026-05-30.
+- `saqlain/phase-5` — deletable (merged).
+- `saqlain/test-p3p4` — deletable (merged).
+- `shubham/phase-5-backend` — deletable (merged via PR #7).
+- `shubham/idx-flag` — deletable (merged via PR #8).
+- `shubham/p5-fup-l2` — deletable (merged via PR #9).
 
 ## What To Read
 
@@ -50,9 +52,9 @@ This file is the shortest path to current branch state, blockers, and next actio
 
 ## Current Priorities
 
-1. [Saqlain] Run WORKPLAN smoke table against merged `main`; push `main` to origin if clean.
-2. [CC-S] `P5-FUP-L1` + `L3` cleared Session 20 (2026-05-21). `L-2` remains — owned by [CC-SH].
-3. [CC-SH] Continue SH-P5 backend (G-1 → G-2 → G-3); also pick up `P5-FUP-L2` (delete-confirm wording). Request `SH-P5-REVIEW` before merge.
+1. [CC-S] Implement IDX-2..3 (`POST /api/indices/{series}/months` + GET list/detail) — blocks Phase 6 meaningfully working past Dec-2025 data.
+2. [CC-S] Begin Phase 6 — Bill entry UI (C-1…C-3) once IDX-2..3 are in.
+3. [CC-SH] SH-P5-5..6 — Excel/PDF export endpoints (request `SH-P5-REVIEW` before merge).
 
 ## File Classification
 
