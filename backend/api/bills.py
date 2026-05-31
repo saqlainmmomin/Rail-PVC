@@ -15,11 +15,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.auth import AuthUser, get_current_user
 from services.db import get_session
-from services.errors import NotFoundProblem, ValidationProblem
+from services.errors import ConflictProblem, NotFoundProblem, ValidationProblem
 from services.pvc_service import (
     assert_bill_belongs_to_tenant,
     assert_contract_belongs_to_tenant,
@@ -38,11 +39,14 @@ VALID_RECOVERY_TYPES = frozenset({
 
 
 class BillCreate(BaseModel):
+    # net_amount is intentionally absent: it is a derived value
+    # (gross − non-PVC recoveries, C-3) the backend owns, never a client
+    # input. ENGINEERING_GUIDELINES: the frontend must not supply financial
+    # values the backend/engine derives.
     bill_number: int
-    bill_date: date | None = None
+    bill_date: date
     measurement_date: date
-    gross_amount: Decimal | None = None
-    net_amount: Decimal | None = None
+    gross_amount: Decimal
 
 
 @router.post("/contracts/{contract_id}/bills", status_code=status.HTTP_201_CREATED)
@@ -52,36 +56,36 @@ async def create_bill(
     user: AuthUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    # Tenant ownership check on the contract first.
-    owns = (
-        await session.execute(
-            text("SELECT 1 FROM contracts WHERE id = :id AND tenant_id = :tid"),
-            {"id": contract_id, "tid": user.tenant_id},
-        )
-    ).first()
-    if owns is None:
-        raise NotFoundProblem("Contract not found", entity="contract", id=contract_id)
+    await assert_contract_belongs_to_tenant(session, contract_id, user.tenant_id)
 
-    row = (
-        await session.execute(
-            text("""
-                INSERT INTO running_bills (
-                    contract_id, bill_number, bill_date, measurement_date,
-                    gross_amount, net_amount, status
-                )
-                VALUES (:cid, :num, :bd, :md, :ga, :na, 'Draft')
-                RETURNING id::text AS id, created_at
-            """),
-            {
-                "cid": contract_id,
-                "num": body.bill_number,
-                "bd": body.bill_date,
-                "md": body.measurement_date,
-                "ga": body.gross_amount,
-                "na": body.net_amount,
-            },
-        )
-    ).mappings().first()
+    try:
+        row = (
+            await session.execute(
+                text("""
+                    INSERT INTO running_bills (
+                        contract_id, bill_number, bill_date, measurement_date,
+                        gross_amount, status
+                    )
+                    VALUES (:cid, :num, :bd, :md, :ga, 'Draft')
+                    RETURNING id::text AS id, created_at
+                """),
+                {
+                    "cid": contract_id,
+                    "num": body.bill_number,
+                    "bd": body.bill_date,
+                    "md": body.measurement_date,
+                    "ga": body.gross_amount,
+                },
+            )
+        ).mappings().first()
+    except IntegrityError as exc:
+        # UNIQUE(contract_id, bill_number) in migration 003. Translate the
+        # raw constraint violation into a structured 409 the UI can render.
+        raise ConflictProblem(
+            f"Bill number {body.bill_number} already exists for this contract",
+            bill_number=body.bill_number,
+        ) from exc
+
     assert row is not None
     return {"id": row["id"], **body.model_dump(mode="json")}
 

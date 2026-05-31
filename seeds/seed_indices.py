@@ -34,17 +34,37 @@ from datetime import date
 from pathlib import Path
 from statistics import mean
 
-# Allow running from repo root or backend/
-sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
-
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent / "backend" / ".env", override=True)
-
-import asyncpg
-from sqlalchemy.engine.url import make_url
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_DIR = REPO_ROOT / "backend"
+
+# Allow running from repo root or backend/
+sys.path.insert(0, str(BACKEND_DIR))
+
+try:
+    from dotenv import load_dotenv
+
+    import asyncpg
+    from sqlalchemy.engine.url import make_url
+except ModuleNotFoundError:
+    if os.environ.get("RAILPVC_SEED_BACKEND_UV") != "1":
+        env = os.environ.copy()
+        env["RAILPVC_SEED_BACKEND_UV"] = "1"
+        os.execvpe(
+            "uv",
+            [
+                "uv",
+                "--project",
+                str(BACKEND_DIR),
+                "run",
+                "python",
+                str(Path(__file__).resolve()),
+            ],
+            env,
+        )
+    raise
+
+load_dotenv(BACKEND_DIR / ".env", override=True)
+
 MONTHLY_AVG_CSV = REPO_ROOT / "REFERENCES" / "jpc_monthly_averages.csv"
 
 SERIES = [
