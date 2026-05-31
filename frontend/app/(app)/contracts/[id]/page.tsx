@@ -165,14 +165,22 @@ export default function ContractDetailPage({
               {data.contractor_name} · {data.railway_zone} · base {data.base_month}
             </p>
           </div>
-          {hasExtraNS && (
+          <div className="flex items-center gap-4">
+            {hasExtraNS && (
+              <Link
+                href={`/contracts/${id}/extra-items`}
+                className="text-[12px] text-amber-700 hover:text-amber-900 underline-offset-2 hover:underline"
+              >
+                Manage extra-item decisions →
+              </Link>
+            )}
             <Link
-              href={`/contracts/${id}/extra-items`}
-              className="text-[12px] text-amber-700 hover:text-amber-900 underline-offset-2 hover:underline"
+              href={`/contracts/${id}/bills`}
+              className="text-[12px] text-slate-600 hover:text-slate-900 underline-offset-2 hover:underline"
             >
-              Manage extra-item decisions →
+              Bills →
             </Link>
-          )}
+          </div>
         </div>
       </header>
 

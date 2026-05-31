@@ -1,0 +1,283 @@
+"use client";
+
+import { use } from "react";
+import Link from "next/link";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft } from "lucide-react";
+import { apiFetch, ApiError } from "@/lib/api/client";
+import { Badge } from "@/components/ui/Badge";
+import { RecoveryForm, RECOVERY_TYPES } from "@/components/contracts/RecoveryForm";
+import { formatINRWithSymbol } from "@/lib/format";
+
+interface Bill {
+  id: string;
+  contract_id: string;
+  bill_number: number;
+  bill_date: string | null;
+  measurement_date: string;
+  gross_amount: string | number | null;
+  net_amount: string | number | null;
+  status: string;
+}
+
+interface BillLine {
+  id: string;
+  bill_id: string;
+  item_id: string;
+  qty_up_to_last: string | number;
+  qty_since_last: string | number;
+  qty_up_to_date: string | number;
+  amount_up_to_last: string | number;
+  amount_since_last: string | number;
+  amount_up_to_date: string | number;
+  special_condition_amount: string | number;
+}
+
+interface Recovery {
+  id: string;
+  bill_id: string;
+  recovery_type: string;
+  amount: string | number;
+  affects_pvc_base: boolean;
+}
+
+const RECOVERY_LABELS: Record<string, string> = Object.fromEntries(
+  RECOVERY_TYPES.map((t) => [t.value, t.label]),
+);
+
+function statusVariant(
+  s: string,
+): "draft" | "approved" | "superseded" | "blocked" | "neutral" {
+  if (s === "Approved") return "approved";
+  if (s === "Superseded") return "superseded";
+  if (s === "ExceptionFlagged") return "blocked";
+  if (s === "Draft") return "draft";
+  return "neutral";
+}
+
+export default function BillDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string; billId: string }>;
+}) {
+  const { id, billId } = use(params);
+  const queryClient = useQueryClient();
+
+  const billQuery = useQuery<Bill>({
+    queryKey: ["bill", billId],
+    queryFn: () => apiFetch<Bill>(`/api/bills/${billId}`),
+  });
+
+  const linesQuery = useQuery<BillLine[]>({
+    queryKey: ["bill-lines", billId],
+    queryFn: () => apiFetch<BillLine[]>(`/api/bills/${billId}/lines`),
+  });
+
+  const recoveriesQuery = useQuery<Recovery[]>({
+    queryKey: ["bill-recoveries", billId],
+    queryFn: () => apiFetch<Recovery[]>(`/api/bills/${billId}/recoveries`),
+  });
+
+  if (billQuery.isLoading) {
+    return (
+      <div className="text-[13px] text-slate-400 py-12 text-center">Loading…</div>
+    );
+  }
+
+  if (billQuery.isError || !billQuery.data) {
+    const err = billQuery.error;
+    const msg =
+      err instanceof ApiError && err.status === 404
+        ? "Bill not found"
+        : err instanceof Error
+          ? err.message
+          : "Failed to load bill";
+    return (
+      <div className="space-y-4">
+        <BackLink id={id} />
+        <div className="text-[13px] text-red-600 bg-red-50 border border-red-100 rounded-xl px-5 py-4">
+          {msg}
+        </div>
+      </div>
+    );
+  }
+
+  const bill = billQuery.data;
+
+  return (
+    <div className="space-y-6">
+      <header className="space-y-2">
+        <BackLink id={id} />
+        <div className="flex items-center gap-3">
+          <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">
+            Bill #{bill.bill_number}
+          </h1>
+          <Badge variant={statusVariant(bill.status)}>{bill.status}</Badge>
+        </div>
+      </header>
+
+      {/* Header fields */}
+      <dl className="grid grid-cols-2 gap-x-8 gap-y-3 max-w-2xl text-[13px]">
+        <Field label="Bill number" value={bill.bill_number} />
+        <Field label="Status" value={bill.status} />
+        <Field label="Bill date" value={bill.bill_date} />
+        <Field label="Measurement date" value={bill.measurement_date} />
+        <Field label="Gross amount" value={formatINRWithSymbol(bill.gross_amount)} />
+        <Field
+          label="Net amount"
+          value={
+            bill.net_amount === null || bill.net_amount === undefined
+              ? "—"
+              : formatINRWithSymbol(bill.net_amount)
+          }
+        />
+      </dl>
+
+      {/* Bill lines — read-only; engine-generated on a PVC run (Phase 7). */}
+      <section className="space-y-2">
+        <h2 className="text-[14px] font-medium text-slate-900">Bill lines</h2>
+        <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+          <div
+            className="px-5 py-3 grid grid-cols-[1fr_repeat(4,minmax(0,1fr))] gap-4
+                       text-[11px] uppercase tracking-wider text-slate-500 font-medium
+                       border-b border-slate-200 bg-slate-50"
+          >
+            <div>Item</div>
+            <div className="text-right">Qty to date</div>
+            <div className="text-right">Amt since last</div>
+            <div className="text-right">Amt to date</div>
+            <div className="text-right">Special cond.</div>
+          </div>
+          {linesQuery.isLoading && (
+            <div className="px-5 py-6 text-[13px] text-slate-400">Loading…</div>
+          )}
+          {!linesQuery.isLoading && (linesQuery.data?.length ?? 0) === 0 && (
+            <div className="px-5 py-6 text-[13px] text-slate-400">
+              No lines yet — bill lines are generated when a PVC run is executed.
+            </div>
+          )}
+          {linesQuery.data?.map((l, i) => (
+            <div
+              key={l.id}
+              className={
+                "px-5 h-11 grid grid-cols-[1fr_repeat(4,minmax(0,1fr))] gap-4 items-center text-[12px] font-mono text-slate-700 " +
+                (i < linesQuery.data!.length - 1 ? "border-b border-slate-100" : "")
+              }
+            >
+              <div className="truncate">{l.item_id}</div>
+              <div className="text-right">{String(l.qty_up_to_date)}</div>
+              <div className="text-right">
+                {formatINRWithSymbol(l.amount_since_last)}
+              </div>
+              <div className="text-right">
+                {formatINRWithSymbol(l.amount_up_to_date)}
+              </div>
+              <div className="text-right">
+                {formatINRWithSymbol(l.special_condition_amount)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Recoveries — manually entered. */}
+      <section className="space-y-2">
+        <h2 className="text-[14px] font-medium text-slate-900">Recoveries</h2>
+        <div className="border border-slate-200 rounded-xl bg-white overflow-hidden">
+          <div
+            className="px-5 py-3 grid grid-cols-[1fr_160px_160px] gap-4
+                       text-[11px] uppercase tracking-wider text-slate-500 font-medium
+                       border-b border-slate-200 bg-slate-50"
+          >
+            <div>Type</div>
+            <div className="text-right">Amount</div>
+            <div>Affects PVC base</div>
+          </div>
+          {recoveriesQuery.isLoading && (
+            <div className="px-5 py-6 text-[13px] text-slate-400">Loading…</div>
+          )}
+          {!recoveriesQuery.isLoading &&
+            (recoveriesQuery.data?.length ?? 0) === 0 && (
+              <div className="px-5 py-6 text-[13px] text-slate-400">
+                No recoveries yet. Add one below.
+              </div>
+            )}
+          {recoveriesQuery.data?.map((r, i) => (
+            <div
+              key={r.id}
+              className={
+                "px-5 h-11 grid grid-cols-[1fr_160px_160px] gap-4 items-center text-[13px] " +
+                (i < recoveriesQuery.data!.length - 1
+                  ? "border-b border-slate-100"
+                  : "")
+              }
+            >
+              <div className="text-slate-900">
+                {RECOVERY_LABELS[r.recovery_type] ?? r.recovery_type}
+              </div>
+              <div className="text-right font-mono text-[12px] text-slate-700">
+                {formatINRWithSymbol(r.amount)}
+              </div>
+              <div>
+                {r.affects_pvc_base ? (
+                  <Badge variant="blocked">Yes</Badge>
+                ) : (
+                  <span className="text-slate-400 text-[12px]">No</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="border border-slate-200 rounded-xl p-5 bg-white">
+          <h3 className="text-[14px] font-medium text-slate-900 mb-3">
+            Add recovery
+          </h3>
+          <RecoveryForm
+            billId={billId}
+            onCreated={() =>
+              queryClient.invalidateQueries({
+                queryKey: ["bill-recoveries", billId],
+              })
+            }
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function BackLink({ id }: { id: string }) {
+  return (
+    <Link
+      href={`/contracts/${id}/bills`}
+      className="inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-700"
+    >
+      <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+      Bills
+    </Link>
+  );
+}
+
+function Field({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number | null | undefined;
+}) {
+  return (
+    <div>
+      <dt className="text-[11px] uppercase tracking-wider text-slate-500 font-medium">
+        {label}
+      </dt>
+      <dd className="text-slate-900 mt-0.5">
+        {value === null || value === undefined || value === "" ? (
+          <span className="text-slate-400">—</span>
+        ) : (
+          String(value)
+        )}
+      </dd>
+    </div>
+  );
+}

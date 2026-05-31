@@ -14,9 +14,9 @@ Use it for current milestone decisions and recent sessions only.
 ## Current Project State
 
 - Phases 0–5 + all P5-FUP findings + SH-P5-1..4 + IDX-2..3 all on `main` (2026-05-30).
-- **Phase 6 (Bill entry UI) is fully unblocked.** Next: [CC-S] implements C-1…C-3.
+- **Phase 6 C-1 + C-2 implemented on `saqlain/phase-6` (2026-05-31).** Awaiting smoke + P6-REVIEW. C-3 next.
 - **Shubham's next task:** G-3 export endpoints (SH-P5-5..6), then IDX-4 (index UI stub).
-- Test suite on `main`: **103/103 backend** (91 prior + 12 SH-P5 + 10 IDX tests), 99/99 engine, 16/16 frontend vitest, `next build` + `npm run lint` clean. Route count 38.
+- Test suite: **106/106 backend** (103 prior + 3 C-1), 99/99 engine, 16/16 frontend vitest, `next build` + `npm run lint` clean. Route count 38.
 - DB migrations at head (013 — `users.is_admin`). Run `013_admin_flag.py` on Supabase before entering new index months.
 - Local backend: `cd backend && source .venv/bin/activate && uvicorn main:app --reload --port 8000`
 - Local frontend: `cd frontend && npm run build && npm start` (port 3000) — always rebuild after code changes
@@ -24,6 +24,22 @@ Use it for current milestone decisions and recent sessions only.
 - Tenant provisioned for `saqlainmmomin@gmail.com` — tenant_id `bd589426-93ba-4847-b5f3-1f69b020b4c0`.
 
 ## Recent Sessions
+
+### Session 22 — 2026-05-31 (Phase 6 C-1 + C-2)
+
+Implemented Phase 6 bill-entry UI through C-2 on `saqlain/phase-6`.
+
+- **Stale kickoff premise caught.** The kickoff said `POST /api/contracts/{id}/bills` didn't exist; it has been on `main` since Phase 3 remediation (commit `739bc4f`). And the WORKPLAN's "no UNIQUE constraint" open question was wrong — migration 003 already declares `UNIQUE(contract_id, bill_number)`. So C-1 backend was a **hardening pass**, not greenfield, and **no migration was needed**.
+
+- **C-1 backend (`backend/api/bills.py`):** swapped the inline ownership SELECT for `assert_contract_belongs_to_tenant`; wrapped the INSERT to catch the unique-violation `IntegrityError` → `ConflictProblem(409)` carrying `bill_number`; tightened `BillCreate` to `{ bill_number, bill_date, measurement_date, gross_amount }` and **dropped client-supplied `net_amount`** (ENGINEERING_GUIDELINES: backend owns derived financial values). Test-first: `test_c1_bills_create.py` (valid 201 / wrong-tenant 404 / duplicate 409), boundary-mocked like the SH-P5 suite. **106/106 backend.** No new route — count stays 38.
+
+- **C-1 frontend:** separate `/contracts/[id]/bills` page (not a tab) + `BillForm`. Duplicate `bill_number` renders inline via `detail.code === "conflict"` (toast suppressed for that case); `gross_amount` sent as string to preserve decimal precision. On create → invalidate list (no redirect — detail page is C-2). "Bills →" link added to the contract detail header.
+
+- **C-2 frontend:** `/contracts/[id]/bills/[billId]` — header fields, read-only **plain** lines table (empty until a Phase 7 PVC run; plain table chosen over AG Grid since data is read-only), recoveries table + `RecoveryForm` (`POST /api/bills/{id}/recoveries`).
+
+- **Decisions logged in WORKPLAN/TASKS:** bill_number unique per-contract; bills as a separate page; net_amount computation deferred to C-3.
+
+- **Not done:** live browser smoke (8 GB dev-box constraint — verified type-check, lint, vitest instead). C-3 (needs new `PUT /api/bills/{id}` + recovery DELETE) deferred — will ask before starting per kickoff rules.
 
 ### Session 21 — 2026-05-30 (PR catch-up + IDX-2..3)
 

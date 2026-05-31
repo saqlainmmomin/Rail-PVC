@@ -1,7 +1,7 @@
 # WORKPLAN.md — RailPVC Implementation Plan
 
 **Last updated:** 2026-05-30 (Session 21 — PR catch-up + IDX-2..3)
-**Status snapshot:** Phases 0–5 + SH-P5 G-1/G-2 + all P5-FUP findings + IDX-2..3 all on `main`. **Phase 6 (bill entry UI) is fully unblocked.** Suite: **103/103 backend**, 99/99 engine, 16/16 frontend vitest, `next build` clean. Route count 38. Migration head: 013.
+**Status snapshot:** Phases 0–5 + SH-P5 G-1/G-2 + all P5-FUP findings + IDX-2..3 on `main`. **Phase 6 C-1 + C-2 on `saqlain/phase-6` (2026-05-31)** — awaiting smoke + P6-REVIEW; C-3 pending. Suite: **106/106 backend**, 99/99 engine, 16/16 frontend vitest, `next build` + lint clean. Route count 38. Migration head: 013.
 
 ---
 
@@ -647,9 +647,9 @@ frontend/app/(app)/
 ## Parallel Track Summary
 
 ```
-As of 2026-05-30:
+As of 2026-05-31:
   main                    Phases 0–5 + SH-P5 G-1/G-2 + IDX-2..3 all merged
-  saqlain (next)          Phase 6 C-1 → C-2 → C-3
+  saqlain/phase-6         Phase 6 C-1 ✅ + C-2 ✅ (awaiting P6-REVIEW); C-3 next
   shubham (next)          G-3 (export), then IDX-4 (index UI)
 
 Phase 6 unblocked: ✅ (SH-P5 G-1/G-2 merged + IDX-2..3 done 2026-05-30)
@@ -668,6 +668,8 @@ Phase 8 unblocked when: Phase 7 + G-3 merged
 ---
 
 ## Phase 6 — Bill Entry UI `[CC-S]`
+
+**Status (2026-05-31):** C-1 ✅ + C-2 ✅ on `saqlain/phase-6`. C-3 pending. 106/106 backend, 16/16 vitest, `next build` + lint clean.
 
 **Dependency:** SH-P5 G-1/G-2 merged ✅ + IDX-2..3 on `main` ✅ → **fully unblocked**
 
@@ -701,24 +703,26 @@ By end of Phase 6, a user can:
 
 ### Task Breakdown
 
-#### C-1 — Bill list + create (`/contracts/[id]/bills`)
+#### C-1 — Bill list + create (`/contracts/[id]/bills`) — ✅ COMPLETE
 
-**Backend:** `POST /api/contracts/{id}/bills` — body: `{ bill_number, bill_date, measurement_date, gross_amount }`. Tenant-gate via contract. Returns created bill. Add to `backend/api/bills.py`. Tests: valid create, wrong-tenant → 404, duplicate bill_number → 409.
+**Backend:** `POST /api/contracts/{id}/bills` **already existed** (Phase 3 remediation). C-1 hardened it: gate via `assert_contract_belongs_to_tenant`; catch `UNIQUE(contract_id, bill_number)` `IntegrityError` → `ConflictProblem` (409); tightened `BillCreate` to `{ bill_number, bill_date, measurement_date, gross_amount }` and **removed client-supplied `net_amount`** (derived value the backend owns). 3 tests in `test_c1_bills_create.py` (valid 201 / wrong-tenant 404 / duplicate 409). No new route — count stays 38.
 
-**Frontend:** Bills tab on `/contracts/[id]` page (new tab alongside Overview/Schedules/Items). TanStack Query for list. "New bill" button → inline form or modal → POST → redirect to bill detail.
+**Frontend:** **Separate page** `/contracts/[id]/bills` (decision below), not a tab. `BillForm` zod-validated; duplicate `bill_number` renders inline via `detail.code === "conflict"`. On create → invalidate list (no redirect — the `[billId]` detail page is C-2). "Bills →" entry link added to the contract detail header.
 
-#### C-2 — Bill detail (`/contracts/[id]/bills/[billId]`)
+#### C-2 — Bill detail (`/contracts/[id]/bills/[billId]`) — ✅ COMPLETE
 
-**Frontend only** (all backend routes exist). Show:
-- Bill header (number, dates, gross/net amount, status badge)
-- Bill lines table (AG Grid, read-only — populated after a PVC run)
-- Recoveries table with "Add recovery" button (type select + amount + affects_pvc_base toggle)
+**Frontend only** (all backend routes exist). Shows:
+- Bill header fields (number, dates, gross/net amount, status badge)
+- Bill lines table — **plain read-only table** (not AG Grid: data is read-only and empty until a Phase 7 PVC run generates lines; a plain table is simpler and matches the app's list styling)
+- Recoveries table + `RecoveryForm` (type select + amount + affects_pvc_base toggle → `POST /api/bills/{id}/recoveries`; invalidates the recoveries query)
+
+net_amount is shown as stored (currently `—` at create); the **computed** net is C-3.
 
 #### C-3 — Bill edit + recovery management
 
 **Frontend:** Inline edit for bill header fields (same PUT pattern as Overview tab). Recovery add/delete. Bill `net_amount` is computed: `gross_amount − sum(recovery amounts where affects_pvc_base=FALSE)` — display only, not user-editable.
 
-### Open Questions
+### Open Questions — RESOLVED (2026-05-31)
 
-- Does `bill_number` need to be unique per contract, or per tenant? (Currently no UNIQUE constraint — add in same diff as C-1 backend if per-contract uniqueness is product requirement.)
-- Should the bills tab be a tab on `/contracts/[id]` or a separate `/contracts/[id]/bills` page? (Recommend: separate page to avoid tab overload — contract detail already has Overview/Schedules/Items/ExtraNS.)
+- **`bill_number` uniqueness:** already `UNIQUE(contract_id, bill_number)` in migration 003 → **per-contract**. No migration needed; C-1 translates the constraint violation into a 409.
+- **Tab vs page:** **separate `/contracts/[id]/bills` page.** Contract detail already carries Overview/Schedules/Items + the ExtraNS link, and the bill `[billId]` sub-route needs a natural parent.

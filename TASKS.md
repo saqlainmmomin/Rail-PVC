@@ -148,11 +148,22 @@ Gap surface:
 
 **Out of scope here:** docs-only flag — no code, no engine/migration changes. This row exists to make the gap visible so CC-S can scope and assign before Phase 7 begins.
 
-### Phases 6–9 — Forward Plan
+### Phase 6 — Bill Entry UI `[CC-S]`
+
+Status: **C-1 + C-2 implemented on `saqlain/phase-6` (2026-05-31).** Awaiting smoke + P6-REVIEW. See WORKPLAN.md Phase 6 section for the route map.
+
+| ID | Title | Owner | Status | Notes |
+|---|---|---|---|---|
+| C-1 | `POST /api/contracts/{id}/bills` 409 hardening + bills list/create UI | [CC-S] | complete | Route already existed (P3 remediation); added `ConflictProblem` on `UNIQUE(contract_id, bill_number)`, gated via `assert_contract_belongs_to_tenant`, dropped client `net_amount`. 3 tests (`test_c1_bills_create.py`). Frontend: separate `/contracts/[id]/bills` page + `BillForm` (inline 409). Route count stays 38. |
+| C-2 | Bill detail `/contracts/[id]/bills/[billId]` | [CC-S] | complete | Frontend only — all GET routes exist (SH-P5). Header fields + read-only lines table (empty until Phase 7) + recoveries table & `RecoveryForm` (`POST /api/bills/{id}/recoveries`). |
+| C-3 | Bill header inline edit + recovery delete + computed net_amount | [CC-S] | pending | Needs `PUT /api/bills/{id}` + `DELETE /api/bills/{id}/recoveries/{rid}` (neither exists yet). net_amount = gross − Σ(recoveries where affects_pvc_base=FALSE), display-only. |
+
+**Resolved Phase 6 open questions:** (1) `bill_number` uniqueness — already `UNIQUE(contract_id, bill_number)` in migration 003, so **per-contract**; no migration needed. (2) Page vs tab — **separate `/contracts/[id]/bills` page** (avoids tab overload; natural parent for the `[billId]` sub-route).
+
+### Phases 7–9 — Forward Plan
 
 | Phase | Owner | Dependency |
 |---|---|---|
-| Phase 6 — Bill entry UI (C-1…C-3) | [CC-S] | **UNBLOCKED** — SH-P5-1…4 merged (PR #7) + IDX-2..3 done (2026-05-30) |
 | Phase 7 — PVC run + results UI (D-1…D-4) | [CC-S] | C-3 stable |
 | Phase 8 — Export UI (E-1, E-2) | [CC-S] | D-4 + SH-P5-5…6 merged |
 | Phase 9 — E2E + integration (F-1…F-3) | [CC-S]+[CC-SH] | Phase 8 stable |
